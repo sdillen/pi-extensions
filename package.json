@@ -9,7 +9,8 @@
 		"typecheck:watch": "tsc --noEmit --watch",
 		"lint": "biome check",
 		"format": "biome check --write",
-		"prepare": "simple-git-hooks"
+		"prepare": "simple-git-hooks",
+		"test": "vitest run"
 	},
 	"lint-staged": {
 		"*.ts": "biome check --write"
@@ -24,7 +25,8 @@
 		"@types/node": "^24.0.0",
 		"lint-staged": "^17.6.0",
 		"simple-git-hooks": "^2.14.0",
-		"typescript": "^5.9.0"
+		"typescript": "^5.9.0",
+		"vitest": "^5.0.3"
 	},
 	"dependencies": {
 		"@earendil-works/pi-ai": "^1.0.0",

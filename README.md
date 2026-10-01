@@ -3,16 +3,16 @@
 Eigene Extensions für den [pi coding agent](https://github.com/earendil-works/pi-coding-agent).
 Zwei unabhängige Module, je ein Ordner:
 
-| Modul | Datei | Was es tut |
+| Modul | Datei(en) | Was es tut |
 |---|---|---|
-| `ssh/` | `ssh.ts` | Remote-Execution: alle Built-in-Tools (read/write/edit/bash) laufen auf einem SSH-Host, eigenes `sudo`-Tool mit maskiertem Passwort-Dialog, einmalige interaktive YubiKey/ED25519-SK-Authentifizierung via ControlMaster |
+| `ssh/` | `index.ts` (+ `master.ts`, `sudo.ts`) | Remote-Execution: alle Built-in-Tools (read/write/edit/bash) laufen auf einem SSH-Host, eigenes `sudo`-Tool mit maskiertem Passwort-Dialog, einmalige interaktive YubiKey/ED25519-SK-Authentifizierung via ControlMaster |
 | `brave-search/` | `brave-search.ts` | Web-Search-Tool über die Brave „LLM Context“-API (Key aus macOS-Keychain / `BRAVE_API_KEY` / `~/.config/brave/api-key`) |
 
 ## Lokal ausprobieren (ohne Deploy)
 
 ```sh
-# SSH-Remote-Modus
-pi -e ./ssh/ssh.ts --ssh user@host[:/remote/path]
+# SSH-Remote-Modus (Verzeichnis mit index.ts)
+pi -e ./ssh --ssh user@host[:/remote/path]
 
 # Brave-Search-Tool
 pi -e ./brave-search/brave-search.ts
@@ -20,10 +20,11 @@ pi -e ./brave-search/brave-search.ts
 
 ## Deploy
 
-Auf dem Desktop (nexus) symlinkt home-manager die Dateien nach
+Auf dem Desktop (nexus) symlinkt home-manager die Verzeichnisse/Dateien nach
 `~/.pi/agent/extensions/` (siehe `home-manager/nexus.nix` im
-dotfiles-Repo); pi entdeckt sie dort automatisch, `/reload` aktiviert
-Änderungen. Der SSH-Modus nutzt dagegen meist `pi -e` direkt.
+dotfiles-Repo); pi entdeckt dort Ordner mit `index.ts` und einzelne `.ts`-Dateien
+automatisch, `/reload` aktiviert Änderungen. Der SSH-Modus nutzt dagegen
+meist `pi -e` direkt.
 
 ## Typecheck, Lint & Format
 
