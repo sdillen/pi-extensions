@@ -1,3 +1,9 @@
 node_modules/
 *.tsbuildinfo
 dist/
+
+# devenv / direnv
+.devenv*
+devenv.local.nix
+devenv.local.yaml
+.direnv
