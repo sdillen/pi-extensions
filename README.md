@@ -25,12 +25,19 @@ Auf dem Desktop (nexus) symlinkt home-manager die Dateien nach
 dotfiles-Repo); pi entdeckt sie dort automatisch, `/reload` aktiviert
 Änderungen. Der SSH-Modus nutzt dagegen meist `pi -e` direkt.
 
-## Typecheck
+## Typecheck, Lint & Format
 
 ```sh
-npm install
-npm run typecheck
+npm install        # installiert auch den pre-commit-Hook (simple-git-hooks)
+npm run typecheck  # tsc --noEmit (strict)
+npm run lint       # biome check (Format + Lint)
+npm run format     # biome check --write (autofix)
 ```
+
+Biome: Formatierung (Tabs, lineWidth 100, double quotes) plus die eine
+gezielte Regel `noFloatingPromises` („Promise nicht behandelt") — bewusst
+kein kompletter Regelkatalog. Vor jedem Commit: `lint-staged` formatiert
+die gestageten Dateien, danach läuft `npm run typecheck`.
 
 Gegen die offiziellen Pakete `@earendil-works/pi-coding-agent` und
 `@earendil-works/pi-tui` (Version muss zur installierten pi-Version passen).
