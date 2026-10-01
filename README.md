@@ -20,13 +20,11 @@ pi -e ./ssh --ssh user@host[:/remote/path]
 pi -e ./brave-search/brave-search.ts
 ```
 
-### Deploy
+### Installation
 
-Auf dem Desktop (nexus) symlinkt home-manager die Verzeichnisse/Dateien nach
-`~/.pi/agent/extensions/` (siehe `home-manager/nexus.nix` im
-dotfiles-Repo); pi entdeckt dort Ordner mit `index.ts` und einzelne `.ts`-Dateien
-automatisch, `/reload` aktiviert Änderungen. Der SSH-Modus nutzt dagegen
-meist `pi -e` direkt.
+Symlinke oder kopiere die Verzeichnisse/Dateien nach `~/.pi/agent/extensions/`;
+pi entdeckt dort Ordner mit `index.ts` und einzelne `.ts`-Dateien automatisch,
+`/reload` aktiviert Änderungen. Der SSH-Modus nutzt dagegen meist `pi -e` direkt.
 
 ## Für Entwickler
 
