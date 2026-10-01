@@ -42,3 +42,14 @@ die gestageten Dateien, danach läuft `npm run typecheck`.
 
 Gegen die offiziellen Pakete `@earendil-works/pi-coding-agent` und
 `@earendil-works/pi-tui` (Version muss zur installierten pi-Version passen).
+
+## Tests
+
+```sh
+npm test   # vitest run
+```
+
+Vitest-Tests für die reine Logik des SSH-Moduls (kein echtes SSH nötig):
+`ssh/sudo.test.ts` (sudo-Erkennung/-Umschreibung, Passwort-TTL) und
+`ssh/master.test.ts` (Socket-Pfade, `ssh`-Argumente, Zombie-Erkennung,
+Master-Lebenszyklus mit gemocktem `spawnSync`).

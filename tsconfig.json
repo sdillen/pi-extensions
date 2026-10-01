@@ -9,7 +9,8 @@
 		"noEmit": true,
 		"skipLibCheck": true,
 		"forceConsistentCasingInFileNames": true,
-		"isolatedModules": true
+		"isolatedModules": true,
+		"allowImportingTsExtensions": true
 	},
 	"include": ["ssh/**/*.ts", "brave-search/**/*.ts"]
 }
