@@ -31,13 +31,11 @@
  *     interaktiv bestätigt (PIN + Touch) statt pro Tool-Call.
  */
 
-import { spawn, spawnSync } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { CURSOR_MARKER, getKeybindings } from "@earendil-works/pi-tui";
-import type { Component, Focusable, Text } from "@earendil-works/pi-tui";
 import type {
 	BashOperations,
 	BashToolInput,
@@ -54,6 +52,8 @@ import {
 	createReadTool,
 	createWriteTool,
 } from "@earendil-works/pi-coding-agent";
+import type { Component, Focusable, Text } from "@earendil-works/pi-tui";
+import { CURSOR_MARKER, getKeybindings } from "@earendil-works/pi-tui";
 
 // ---------------------------------------------------------------------------
 // sudo password state – lives ONLY in this extension's memory
@@ -178,7 +178,11 @@ class MaskedPasswordPrompt implements Component, Focusable {
 			this.cursor = chars().length;
 			return;
 		}
-		if (kb.matches(data, "tui.editor.undo") || kb.matches(data, "tui.editor.yank") || kb.matches(data, "tui.editor.yankPop")) {
+		if (
+			kb.matches(data, "tui.editor.undo") ||
+			kb.matches(data, "tui.editor.yank") ||
+			kb.matches(data, "tui.editor.yankPop")
+		) {
 			return; // bewusst ignoriert
 		}
 		// druckbare Zeichen einfügen (Steuerzeichen ablehnen)
@@ -269,8 +273,8 @@ async function promptSudoPassword(
 		if (ctx.mode === "tui") {
 			// maskiertes Fenster via ctx.ui.custom (Editor wird kurz ersetzt)
 			try {
-				return await ctx.ui.custom<string | undefined>((_tui, _theme, _kb, done) =>
-					new MaskedPasswordPrompt(title, done),
+				return await ctx.ui.custom<string | undefined>(
+					(_tui, _theme, _kb, done) => new MaskedPasswordPrompt(title, done),
 				);
 			} catch {
 				return undefined;
@@ -282,7 +286,10 @@ async function promptSudoPassword(
 	const trimmed = pass?.trim();
 	if (!trimmed) return undefined;
 	rememberSudo(trimmed);
-	ctx.ui.setStatus("sudo", ctx.ui.theme?.fg?.("accent", "sudo: Passwort übernommen") ?? "sudo: übernommen");
+	ctx.ui.setStatus(
+		"sudo",
+		ctx.ui.theme?.fg?.("accent", "sudo: Passwort übernommen") ?? "sudo: übernommen",
+	);
 	return trimmed;
 }
 
@@ -343,10 +350,14 @@ export function canRoundTrip(socket: string, remote: string): boolean {
 		const r = spawnSync(
 			"ssh",
 			[
-				"-o", `ControlPath=${socket}`,
-				"-o", "ControlMaster=no", // nie selbst in einen Verbindungsversuch fallen
-				"-o", "BatchMode=yes", // kein Prompt – nur der bestehende Socket zählt
-				"-o", "ConnectTimeout=3",
+				"-o",
+				`ControlPath=${socket}`,
+				"-o",
+				"ControlMaster=no", // nie selbst in einen Verbindungsversuch fallen
+				"-o",
+				"BatchMode=yes", // kein Prompt – nur der bestehende Socket zählt
+				"-o",
+				"ConnectTimeout=3",
 				remote,
 				"true",
 			],
@@ -361,9 +372,13 @@ export function canRoundTrip(socket: string, remote: string): boolean {
 /** Räumt einen (mutmaßlich toten) Master auf: sauber beenden, Socket entfernen. */
 export function cleanupMaster(socket: string, remote: string): void {
 	try {
-		spawnSync("ssh", ["-o", `ControlPath=${socket}`, "-o", "ConnectTimeout=2", "-O", "exit", remote], {
-			timeout: 2000,
-		});
+		spawnSync(
+			"ssh",
+			["-o", `ControlPath=${socket}`, "-o", "ConnectTimeout=2", "-O", "exit", remote],
+			{
+				timeout: 2000,
+			},
+		);
 	} catch {
 		/* ignore */
 	}
@@ -434,7 +449,10 @@ async function primeControlMaster(ctx: ExtensionContext, remote: string): Promis
 			return true;
 		}
 		// Zombie-Master: aufräumen und unten frisch interaktiv authentifizieren.
-		ctx.ui.notify(`SSH: alter Master für ${remote} war tot (Zombie) – neue Authentifizierung`, "info");
+		ctx.ui.notify(
+			`SSH: alter Master für ${remote} war tot (Zombie) – neue Authentifizierung`,
+			"info",
+		);
 	}
 	// Stale Socket-Datei eines toten Masters entfernen, sonst weigert sich ssh.
 	cleanupMaster(socket, remote);
@@ -449,79 +467,84 @@ async function primeControlMaster(ctx: ExtensionContext, remote: string): Promis
 
 	ctx.ui.notify(`SSH: ${remote} – PIN eingeben, dann YubiKey berühren`, "info");
 
-	const ok = await withBlocked(`SSH ${remote}: PIN + YubiKey`, () => ctx.ui.custom<boolean>((tui, _theme, _kb, done) => {
-		// TUI anhalten → Terminal (kanonischer Modus) an ssh übergeben
-		tui.stop();
-		process.stdout.write("\x1b[2J\x1b[H");
-		process.stdout.write(
-			`\x1b[1m>> SSH-Authentifizierung für ${remote}\x1b[0m\n` +
-				`PIN eingeben, dann YubiKey berühren. Die Pi-Session startet erst danach.\n` +
-				`(Ctrl-C = abbrechen)\n\n`,
-		);
+	const ok = await withBlocked(`SSH ${remote}: PIN + YubiKey`, () =>
+		ctx.ui.custom<boolean>((tui, _theme, _kb, done) => {
+			// TUI anhalten → Terminal (kanonischer Modus) an ssh übergeben
+			tui.stop();
+			process.stdout.write("\x1b[2J\x1b[H");
+			process.stdout.write(
+				`\x1b[1m>> SSH-Authentifizierung für ${remote}\x1b[0m\n` +
+					`PIN eingeben, dann YubiKey berühren. Die Pi-Session startet erst danach.\n` +
+					`(Ctrl-C = abbrechen)\n\n`,
+			);
 
-		const child: ChildProcess = spawn(
-			"ssh",
-			[
-				"-N", // keine Remote-Kommando → bleibt als Master verfügbar
-				"-f", // nach erfolgreicher Auth in den Hintergrund (Return danach)
-				"-o", "ControlMaster=auto", // Sieger wird Master; starten parallel weitere
-				// Pi-Sessions, hängt sich der Verlierer still an den Socket (kein Re-Auth/Stray).
-				"-S", socket,
-				"-o", `ControlPersist=${SSH_CONTROL_PERSIST}`,
-				remote,
-			],
-			{ stdio: "inherit", env: process.env },
-		);
+			const child: ChildProcess = spawn(
+				"ssh",
+				[
+					"-N", // keine Remote-Kommando → bleibt als Master verfügbar
+					"-f", // nach erfolgreicher Auth in den Hintergrund (Return danach)
+					"-o",
+					"ControlMaster=auto", // Sieger wird Master; starten parallel weitere
+					// Pi-Sessions, hängt sich der Verlierer still an den Socket (kein Re-Auth/Stray).
+					"-S",
+					socket,
+					"-o",
+					`ControlPersist=${SSH_CONTROL_PERSIST}`,
+					remote,
+				],
+				{ stdio: "inherit", env: process.env },
+			);
 
-		let finished = false;
-		const onSigint = () => child.kill("SIGINT");
-		const authTimeout = setTimeout(() => {
-			try {
-				child.kill("SIGTERM");
-			} catch {
-				/* ignore */
-			}
-			finish(false);
-		}, AUTH_TIMEOUT_MS);
-		const finish = (success: boolean) => {
-			if (finished) return;
-			finished = true;
-			process.removeListener("SIGINT", onSigint);
-			clearTimeout(authTimeout);
-			try {
-				tui.start();
-			} catch {
-				/* ignore */
-			}
-			try {
-				tui.requestRender(true);
-			} catch {
-				/* ignore */
-			}
-			done(success);
-		};
-
-		process.once("SIGINT", onSigint); // NUR hier: Ctrl-C bricht ab, tötet pi nicht
-		child.on("error", () => finish(false));
-		child.on("close", (code) => {
-			// ssh -f kehrt erst NACH erfolgreicher Auth mit 0 zurück. Die
-			// Socket-Anlage kann minimal nachlaufen → kurz nachpolln.
-			if (code !== 0) {
-				finish(false);
-				return;
-			}
-			let tries = 0;
-			const poll = setInterval(() => {
-				tries += 1;
-				if (isSocketAlive(socket, remote) || tries > 20) {
-					clearInterval(poll);
-					finish(isSocketAlive(socket, remote));
+			let finished = false;
+			const onSigint = () => child.kill("SIGINT");
+			const authTimeout = setTimeout(() => {
+				try {
+					child.kill("SIGTERM");
+				} catch {
+					/* ignore */
 				}
-			}, 50);
-		});
+				finish(false);
+			}, AUTH_TIMEOUT_MS);
+			const finish = (success: boolean) => {
+				if (finished) return;
+				finished = true;
+				process.removeListener("SIGINT", onSigint);
+				clearTimeout(authTimeout);
+				try {
+					tui.start();
+				} catch {
+					/* ignore */
+				}
+				try {
+					tui.requestRender(true);
+				} catch {
+					/* ignore */
+				}
+				done(success);
+			};
 
-		return { render: () => [], invalidate: () => {} };
-	})).catch(() => false);
+			process.once("SIGINT", onSigint); // NUR hier: Ctrl-C bricht ab, tötet pi nicht
+			child.on("error", () => finish(false));
+			child.on("close", (code) => {
+				// ssh -f kehrt erst NACH erfolgreicher Auth mit 0 zurück. Die
+				// Socket-Anlage kann minimal nachlaufen → kurz nachpolln.
+				if (code !== 0) {
+					finish(false);
+					return;
+				}
+				let tries = 0;
+				const poll = setInterval(() => {
+					tries += 1;
+					if (isSocketAlive(socket, remote) || tries > 20) {
+						clearInterval(poll);
+						finish(isSocketAlive(socket, remote));
+					}
+				}, 50);
+			});
+
+			return { render: () => [], invalidate: () => {} };
+		}),
+	).catch(() => false);
 
 	if (ok) {
 		sshControlSocket = socket;
@@ -652,7 +675,8 @@ async function spawnSsh(
 	return run(0);
 }
 
-const WRONG_PW =/Sorry, try again|incorrect password|wrong password|authentication failure|passwd/i;
+const WRONG_PW =
+	/Sorry, try again|incorrect password|wrong password|authentication failure|passwd/i;
 
 // ---------------------------------------------------------------------------
 // Tool operation overrides
@@ -661,7 +685,8 @@ const WRONG_PW =/Sorry, try again|incorrect password|wrong password|authenticati
 function createRemoteReadOps(remote: string, remoteCwd: string, localCwd: string): ReadOperations {
 	const toRemote = (p: string) => p.replace(localCwd, remoteCwd);
 	return {
-		readFile: (p) => spawnSsh(remote, `cat ${JSON.stringify(toRemote(p))}`).then((r) => Buffer.from(r.output)),
+		readFile: (p) =>
+			spawnSsh(remote, `cat ${JSON.stringify(toRemote(p))}`).then((r) => Buffer.from(r.output)),
 		access: (p) =>
 			spawnSsh(remote, `test -r ${JSON.stringify(toRemote(p))}`).then((r) => {
 				if (r.exitCode !== 0) throw new Error("not readable");
@@ -678,7 +703,11 @@ function createRemoteReadOps(remote: string, remoteCwd: string, localCwd: string
 	};
 }
 
-function createRemoteWriteOps(remote: string, remoteCwd: string, localCwd: string): WriteOperations {
+function createRemoteWriteOps(
+	remote: string,
+	remoteCwd: string,
+	localCwd: string,
+): WriteOperations {
 	const toRemote = (p: string) => p.replace(localCwd, remoteCwd);
 	return {
 		writeFile: async (p, content) => {
@@ -719,7 +748,11 @@ function createRemoteBashOps(
 				return { exitCode: r.exitCode };
 			}
 			// sudo kommt hier nur noch aus `!`-Kommandos; das bash-Tool lehnt es ab
-			return execWithSudoPass(ctx, remote, command, base + injectSudoStdin(command), { onData, signal, timeout });
+			return execWithSudoPass(ctx, remote, command, base + injectSudoStdin(command), {
+				onData,
+				signal,
+				timeout,
+			});
 		},
 	};
 }
@@ -777,7 +810,8 @@ async function execWithSudoPass(
 			forgetSudo();
 			if (attempt === 0) {
 				pass = await promptSudoPassword(ctx, remote, reason);
-				if (pass === undefined) throw new Error(`[ssh.ts] sudo-Passwort-Eingabe abgebrochen für ${remote}`);
+				if (pass === undefined)
+					throw new Error(`[ssh.ts] sudo-Passwort-Eingabe abgebrochen für ${remote}`);
 				continue;
 			}
 		}
@@ -792,7 +826,10 @@ async function execWithSudoPass(
 
 export default function (pi: ExtensionAPI) {
 	emitEvent = (name, data) => pi.events.emit(name, data);
-	pi.registerFlag("ssh", { description: "SSH remote: user@host or user@host:/path", type: "string" });
+	pi.registerFlag("ssh", {
+		description: "SSH remote: user@host or user@host:/path",
+		type: "string",
+	});
 
 	const localCwd = process.cwd();
 	const localRead = createReadTool(localCwd);
@@ -898,7 +935,9 @@ export default function (pi: ExtensionAPI) {
 			if (!ssh) throw new Error("[ssh.ts] sudo-Tool ist nur mit --ssh verfügbar");
 			const input = params as BashToolInput;
 			if (/^\s*sudo\b/.test(input.command ?? "")) {
-				throw new Error('Pass the command without the leading "sudo" – the sudo tool already runs it as root.');
+				throw new Error(
+					'Pass the command without the leading "sudo" – the sudo tool already runs it as root.',
+				);
 			}
 			// Vorab-Prompt, damit das Passwort-Fenster NICHT in der Mitte
 			// des Command-Streamings überraschend auftaucht, sondern explizit.
@@ -942,7 +981,10 @@ export default function (pi: ExtensionAPI) {
 		// noch kein lebender ControlMaster existiert. Erst danach läuft die Session.
 		const primed = await primeControlMaster(ctx, remote);
 		if (!primed) {
-			ctx.ui.notify(`SSH-Authentifizierung für ${remote} fehlgeschlagen – Session ohne Remote`, "error");
+			ctx.ui.notify(
+				`SSH-Authentifizierung für ${remote} fehlgeschlagen – Session ohne Remote`,
+				"error",
+			);
 			return;
 		}
 		// Ab jetzt kann ein unterwegs gestorbener Master automatisch neu
@@ -955,7 +997,11 @@ export default function (pi: ExtensionAPI) {
 		resolvedSsh = { remote, remoteCwd };
 		setSudoToolActive(true);
 
-		ctx.ui.setStatus("ssh", ctx.ui.theme?.fg?.("accent", `SSH: ${resolvedSsh.remote}:${resolvedSsh.remoteCwd}`) ?? `SSH: ${resolvedSsh.remote}:${resolvedSsh.remoteCwd}`);
+		ctx.ui.setStatus(
+			"ssh",
+			ctx.ui.theme?.fg?.("accent", `SSH: ${resolvedSsh.remote}:${resolvedSsh.remoteCwd}`) ??
+				`SSH: ${resolvedSsh.remote}:${resolvedSsh.remoteCwd}`,
+		);
 		ctx.ui.notify(`SSH ${resolvedSsh.remote}:${resolvedSsh.remoteCwd} – authentifiziert`, "info");
 	});
 

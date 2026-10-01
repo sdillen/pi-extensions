@@ -31,10 +31,11 @@
  */
 
 import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { promisify } from "node:util";
+import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
 	DEFAULT_MAX_BYTES,
@@ -42,9 +43,8 @@ import {
 	formatSize,
 	truncateHead,
 } from "@earendil-works/pi-coding-agent";
-import { StringEnum } from "@earendil-works/pi-ai";
-import { Type } from "typebox";
 import { Text } from "@earendil-works/pi-tui";
+import { Type } from "typebox";
 
 const ENDPOINT = "https://api.search.brave.com/res/v1/llm/context";
 const TIMEOUT_MS = 30_000; // Brave-Empfehlung: 30s Timeout
@@ -259,8 +259,7 @@ async function doFetch(
 		const text = await res.text().catch(() => "");
 		if (res.status === 429) {
 			const retryAfter = Number(res.headers.get("retry-after"));
-			const backoff =
-				Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1500;
+			const backoff = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1500;
 			throw new RetryableError("Brave rate limited (429)", backoff);
 		}
 		if (res.status >= 500)
@@ -471,7 +470,8 @@ export default function braveSearchExtension(pi: ExtensionAPI) {
 			if (truncation.truncated) {
 				details.truncated = true;
 				const tmp = writeTempFile(text);
-				const tail = `\n\n[Output gekürzt: ${truncation.outputLines}/${truncation.totalLines} Zeilen ` +
+				const tail =
+					`\n\n[Output gekürzt: ${truncation.outputLines}/${truncation.totalLines} Zeilen ` +
 					`(${formatSize(truncation.outputBytes)}/${formatSize(truncation.totalBytes)}). ` +
 					`Komplett gespeichert: ${tmp}]`;
 				text = truncation.content + tail;
@@ -547,7 +547,8 @@ export default function braveSearchExtension(pi: ExtensionAPI) {
 
 	// API-Key-Verwaltung: macOS Keychain (Service „pi-brave-search“)
 	pi.registerCommand("brave-key", {
-		description: "Brave-API-Key in der macOS Keychain verwalten: /brave-key [status|set [KEY]|delete]",
+		description:
+			"Brave-API-Key in der macOS Keychain verwalten: /brave-key [status|set [KEY]|delete]",
 		getArgumentCompletions: (prefix) => {
 			const verbs = ["status", "set", "delete"];
 			const p = prefix.toLowerCase();
@@ -571,49 +572,52 @@ export default function braveSearchExtension(pi: ExtensionAPI) {
 				if (!key) {
 					ctx.ui.notify(
 						"Kein Key gefunden. Nutzung: /brave-key set <KEY> — oder den Key vorher in die Zwischenablage kopieren",
+						"warning",
+					);
+					return;
+				}
+				try {
+					await keychainSet(key.trim());
+					notifySuccess(
+						ctx,
+						`Brave-API-Key gespeichert (${source}) → Keychain „${KEYCHAIN_SERVICE}“`,
+					);
+				} catch (err) {
+					ctx.ui.notify(`Konnte Keychain nicht schreiben: ${(err as Error).message}`, "error");
+				}
+				return;
+			}
+
+			if (verb === "delete") {
+				const ok = await ctx.ui.confirm(
+					"Brave-API-Key löschen?",
+					`Der Eintrag „${KEYCHAIN_SERVICE}/${KEYCHAIN_ACCOUNT}“ wird aus der Keychain entfernt.`,
+				);
+				if (!ok) {
+					ctx.ui.notify("Abgebrochen", "info");
+					return;
+				}
+				await keychainDelete();
+				notifySuccess(ctx, "Brave-API-Key aus der Keychain entfernt");
+				return;
+			}
+
+			// default: status
+			const key = await resolveApiKey();
+			if (!key) {
+				ctx.ui.notify(
+					"Kein Brave-API-Key gefunden. /brave-key set (Key vorher in die Zwischenablage kopieren)",
 					"warning",
 				);
 				return;
 			}
-			try {
-				await keychainSet(key.trim());
-				notifySuccess(ctx, `Brave-API-Key gespeichert (${source}) → Keychain „${KEYCHAIN_SERVICE}“`);
-			} catch (err) {
-				ctx.ui.notify(`Konnte Keychain nicht schreiben: ${(err as Error).message}`, "error");
-			}
-			return;
-		}
-
-		if (verb === "delete") {
-			const ok = await ctx.ui.confirm(
-				"Brave-API-Key löschen?",
-				`Der Eintrag „${KEYCHAIN_SERVICE}/${KEYCHAIN_ACCOUNT}“ wird aus der Keychain entfernt.`,
-			);
-			if (!ok) {
-				ctx.ui.notify("Abgebrochen", "info");
-				return;
-			}
-			await keychainDelete();
-			notifySuccess(ctx, "Brave-API-Key aus der Keychain entfernt");
-			return;
-		}
-
-		// default: status
-		const key = await resolveApiKey();
-		if (!key) {
-			ctx.ui.notify(
-				"Kein Brave-API-Key gefunden. /brave-key set (Key vorher in die Zwischenablage kopieren)",
-				"warning",
-			);
-			return;
-		}
-		const keychainStored = (await keychainGet()) === key;
-		const source = keychainStored
-			? `Keychain „${KEYCHAIN_SERVICE}“`
-			: key === (process.env.BRAVE_API_KEY ?? "").trim()
-				? "Env-Var BRAVE_API_KEY"
-				: "Datei ~/.config/brave/api-key";
-		notifySuccess(ctx, `Brave-API-Key: ${maskKey(key)} (Quelle: ${source})`);
-	},
+			const keychainStored = (await keychainGet()) === key;
+			const source = keychainStored
+				? `Keychain „${KEYCHAIN_SERVICE}“`
+				: key === (process.env.BRAVE_API_KEY ?? "").trim()
+					? "Env-Var BRAVE_API_KEY"
+					: "Datei ~/.config/brave/api-key";
+			notifySuccess(ctx, `Brave-API-Key: ${maskKey(key)} (Quelle: ${source})`);
+		},
 	});
 }
