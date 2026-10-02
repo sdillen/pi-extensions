@@ -53,6 +53,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { Component, Focusable, Text } from "@earendil-works/pi-tui";
 import { CURSOR_MARKER, getKeybindings } from "@earendil-works/pi-tui";
+import { GUARD_GRACE_S, guardCommand, rootGuardArgs } from "./guard.ts";
 import {
 	canRoundTrip,
 	cleanupMaster,
@@ -471,19 +472,32 @@ async function spawnSsh(
 
 	const execOnce = (): Promise<SshResult> =>
 		new Promise((resolve, reject) => {
+			// Abbrechbare Aufrufe laufen im Watchdog (siehe guard.ts): stdin bleibt
+			// offen, Schließen räumt die Remote-Prozessgruppe ab.
+			const guarded = Boolean(opts.signal || opts.timeout);
+			const remoteCmd = guarded ? guardCommand(command, opts.stdin !== undefined) : command;
 			const stdio: Array<"pipe" | "ignore"> =
-				opts.stdin !== undefined ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"];
-			const child = spawn("ssh", [...sshCommandArgs(remote), command], { stdio });
+				guarded || opts.stdin !== undefined ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"];
+			const child = spawn("ssh", [...sshCommandArgs(remote), remoteCmd], { stdio });
 			const stdout = child.stdout!;
 			const stderr = child.stderr!;
 			const stdin = child.stdin!;
 			const chunks: Buffer[] = [];
 			let timedOut = false;
+			let killTimer: NodeJS.Timeout | undefined;
+
+			// Remote sauber beenden lassen (EOF → Watchdog); bleibt die Verbindung
+			// stumm (Netz weg), nach der Gnadenfrist den lokalen Client killen.
+			const stop = () => {
+				if (killTimer) return;
+				stdin.end();
+				killTimer = setTimeout(() => child.kill(), (GUARD_GRACE_S + 3) * 1000);
+			};
 
 			const timer = opts.timeout
 				? setTimeout(() => {
 						timedOut = true;
-						child.kill();
+						stop();
 					}, opts.timeout * 1000)
 				: undefined;
 
@@ -496,21 +510,22 @@ async function spawnSsh(
 				opts.onData?.(d);
 			});
 
-			const onAbort = () => child.kill();
+			const onAbort = () => stop();
 			opts.signal?.addEventListener("abort", onAbort, { once: true });
 
-			if (opts.stdin !== undefined) {
-				stdin.on("error", () => {});
-				stdin.write(opts.stdin, () => stdin.end());
-			}
+			if (guarded || opts.stdin !== undefined) stdin.on("error", () => {});
+			if (opts.stdin !== undefined) stdin.write(opts.stdin, () => guarded || stdin.end());
+			if (opts.signal?.aborted) stop();
 
 			child.on("error", (e) => {
 				if (timer) clearTimeout(timer);
+				if (killTimer) clearTimeout(killTimer);
 				opts.signal?.removeEventListener("abort", onAbort);
 				reject(e);
 			});
 			child.on("close", (code) => {
 				if (timer) clearTimeout(timer);
+				if (killTimer) clearTimeout(killTimer);
 				opts.signal?.removeEventListener("abort", onAbort);
 				const output = Buffer.concat(chunks).toString();
 				if (opts.signal?.aborted) reject(new Error("aborted"));
@@ -612,7 +627,6 @@ function createRemoteSudoOps(
 	ctx: ExtensionContext,
 ): BashOperations {
 	const toRemote = (p: string) => p.replace(localCwd, remoteCwd);
-	const shq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
 	return {
 		exec: (command, cwd, { onData, signal, timeout }) =>
@@ -620,7 +634,7 @@ function createRemoteSudoOps(
 				ctx,
 				remote,
 				command,
-				`cd ${JSON.stringify(toRemote(cwd))} && sudo -S -p '' bash -c ${shq(command)}`,
+				`cd ${JSON.stringify(toRemote(cwd))} && sudo -S -p '' ${rootGuardArgs(command)}`,
 				{ onData, signal, timeout },
 			),
 	};
