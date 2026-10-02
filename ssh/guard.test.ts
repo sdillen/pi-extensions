@@ -74,9 +74,12 @@ describe("guardCommand", () => {
 		const pids = await readPids(f, 2);
 		expect(pids.every(alive)).toBe(true);
 
+		const t0 = Date.now();
 		child.stdin.end();
 		const r = await done;
 		expect(r.code).not.toBe(0);
+		expect(r.output).toBe(""); // keine Job-Meldungen („[1]- Terminated …“) von bash
+		expect(Date.now() - t0).toBeLessThan(1000); // Watchdog hält den Kanal nicht offen
 		await waitFor(() => !pids.some(alive), 1000);
 	});
 
