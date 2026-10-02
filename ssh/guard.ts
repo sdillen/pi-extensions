@@ -19,21 +19,23 @@ export const shq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 // Der Watchdog liest fd 3 (sonst bekäme er als Background-Job /dev/null) und
 // ignoriert nach dem Auslösen TERM, damit ihn das Wrapper-Ende nicht vor dem
 // KILL-Schritt abräumt; seine Ausgaben gehen nach /dev/null, damit er den
-// Kanal nicht offen hält.
+// Kanal nicht offen hält. Job-Meldungen von bash („[1]- Terminated …“, ab
+// bash 5.2 auch ohne TTY) landen auf dem Wrapper-stderr → /dev/null; nur der
+// Befehl bekommt den echten stderr über fd 4.
 const GUARD = `set -m
-exec 3<&0
+exec 3<&0 4>&2 2>/dev/null
 if [ "$2" = 1 ]; then
   IFS= read -r pw
-  ( printf '%s\\n' "$pw" | bash -c "$1" ) 3<&- &
+  ( printf '%s\\n' "$pw" | bash -c "$1" ) 2>&4 3<&- 4>&- &
   unset pw
 else
-  bash -c "$1" </dev/null 3<&- &
+  bash -c "$1" </dev/null 2>&4 3<&- 4>&- &
 fi
 pid=$!
 ( cat <&3 >/dev/null; exec 3<&-; trap '' TERM
-  kill -TERM -- -$pid; sleep ${GUARD_GRACE_S}; kill -KILL -- -$pid ) </dev/null >/dev/null 2>&1 &
+  kill -TERM -- -$pid; sleep ${GUARD_GRACE_S}; kill -KILL -- -$pid ) </dev/null >/dev/null 2>&1 4>&- &
 wd=$!
-exec 3<&-
+exec 3<&- 4>&-
 wait $pid; rc=$?
 kill -- -$wd 2>/dev/null
 exit $rc`;
@@ -42,10 +44,11 @@ exit $rc`;
 // killen, aber sudo reicht sein TERM/HUP an diesen Wrapper weiter, der die
 // root-Prozessgruppe dann selbst abräumt.
 const ROOT_GUARD = `set -m
-bash -c "$1" </dev/null &
+exec 4>&2 2>/dev/null
+bash -c "$1" </dev/null 2>&4 4>&- &
 pid=$!
 trap 'kill -TERM -- -$pid
-  ( sleep ${GUARD_GRACE_S}; kill -KILL -- -$pid ) </dev/null >/dev/null 2>&1 &
+  ( sleep ${GUARD_GRACE_S}; kill -KILL -- -$pid ) </dev/null >/dev/null 2>&1 4>&- &
   exit 143' TERM HUP INT
 wait $pid`;
 
