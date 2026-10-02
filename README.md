@@ -114,6 +114,15 @@ Gegen die offiziellen Pakete `@earendil-works/pi-coding-agent` und
   `-n`/`--non-interactive` fliegt raus (sonst ignoriert sudo stdin). Die
   Regex erkennt sudo auch hinter Wrappern (`timeout`, `nice`, `nohup`, `env`,
   …). Das Passwort lebt nur im Extension-Speicher, TTL 4 min.
+- `guard.ts` — Remote-Watchdog für abbrechbare Aufrufe (bash, `!`, sudo).
+  Ohne PTY gibt es remote kein SIGHUP; ein gekillter ssh-Client ließe den
+  Befehl verwaist weiterlaufen. Der Befehl läuft daher in eigener
+  Prozessgruppe, ein Watchdog liest stdin: EOF (ESC, Timeout, Client/Netz/
+  Master weg) → TERM an die Gruppe, nach 2 s KILL. Lokal bleibt stdin
+  deshalb offen; Abbrechen = stdin schließen. Beim sudo-Tool räumt ein
+  zweiter Wrapper als root ab (sudo reicht TERM weiter). Grenze: bei
+  `!`-Kommandos mit eingebettetem `sudo` können root-Kindprozesse
+  überleben; Prozesse, die sich selbst per `setsid` lösen, ebenso.
 
 ### Architektur: brave-search/
 
