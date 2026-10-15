@@ -5,8 +5,8 @@ import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GUARD_GRACE_S, guardCommand, rootGuardArgs } from "./guard.ts";
 
-// Lokal statt über ssh: der Remote-Prozess sieht dasselbe – stdin ist eine
-// Pipe, kein TTY, und „Kanal zu“ heißt EOF auf stdin.
+// Local instead of via ssh: the remote process sees the same thing – stdin is a
+// pipe, not a TTY, and "channel closed" means EOF on stdin.
 
 let dir: string;
 beforeEach(() => {
@@ -44,7 +44,7 @@ async function waitFor(pred: () => boolean, ms: number) {
 	}
 }
 
-/** Wartet, bis der Befehl seine PIDs nach `pids` geschrieben hat. */
+/** Waits until the command has written its PIDs to `pids`. */
 async function readPids(file: string, n: number): Promise<number[]> {
 	await waitFor(
 		() => fs.existsSync(file) && fs.readFileSync(file, "utf8").trim().split(/\s+/).length >= n,
@@ -54,7 +54,7 @@ async function readPids(file: string, n: number): Promise<number[]> {
 }
 
 describe("guardCommand", () => {
-	it("reicht Ausgabe und Exit-Code durch und endet trotz offenem stdin", async () => {
+	it("passes through output and exit code and ends despite open stdin", async () => {
 		const { done } = run(guardCommand(`echo out; echo err >&2; printf '%s' "it's"; exit 3`));
 		const r = await done;
 		expect(r.code).toBe(3);
@@ -63,12 +63,12 @@ describe("guardCommand", () => {
 		expect(r.output).toContain("it's");
 	});
 
-	it("gibt dem Befehl /dev/null als stdin", async () => {
+	it("gives the command /dev/null as stdin", async () => {
 		const { done } = run(guardCommand(`cat; echo fertig`));
 		expect((await done).output).toBe("fertig\n");
 	});
 
-	it("killt bei stdin-EOF die ganze Prozessgruppe inkl. Hintergrund-Kinder", async () => {
+	it("kills the whole process group incl. background children on stdin EOF", async () => {
 		const f = path.join(dir, "pids");
 		const { child, done } = run(guardCommand(`sleep 100 & echo $! $$ > ${f}; sleep 100`));
 		const pids = await readPids(f, 2);
@@ -78,36 +78,36 @@ describe("guardCommand", () => {
 		child.stdin.end();
 		const r = await done;
 		expect(r.code).not.toBe(0);
-		expect(r.output).toBe(""); // keine Job-Meldungen („[1]- Terminated …“) von bash
-		expect(Date.now() - t0).toBeLessThan(1000); // Watchdog hält den Kanal nicht offen
+		expect(r.output).toBe(""); // no job messages ("[1]- Terminated …") from bash
+		expect(Date.now() - t0).toBeLessThan(1000); // watchdog does not keep the channel open
 		await waitFor(() => !pids.some(alive), 1000);
 	});
 
-	it("schickt KILL, wenn TERM ignoriert wird", async () => {
+	it("sends KILL when TERM is ignored", async () => {
 		const f = path.join(dir, "pids");
 		const { child, done } = run(guardCommand(`trap '' TERM; sleep 100 & echo $! > ${f}; wait`));
 		const [pid] = await readPids(f, 1);
 
 		const t0 = Date.now();
 		child.stdin.end();
-		await done; // Leader ignoriert TERM → endet erst durch den KILL
+		await done; // leader ignores TERM → ends only through the KILL
 		expect(Date.now() - t0).toBeGreaterThanOrEqual(GUARD_GRACE_S * 1000 - 100);
 		await waitFor(() => !alive(pid), 1000);
 	}, 10_000);
 
-	it("gibt mit passLine die erste stdin-Zeile an den Befehl und hält den Rest offen", async () => {
+	it("with passLine, gives the first stdin line to the command and keeps the rest open", async () => {
 		const { child, done } = run(
 			guardCommand(`IFS= read -r x; echo "got:$x"; read y || echo eof`, true),
 		);
-		child.stdin.write("geheim 'pw'\n");
+		child.stdin.write("secret 'pw'\n");
 		const r = await done;
-		expect(r.output).toBe("got:geheim 'pw'\neof\n");
+		expect(r.output).toBe("got:secret 'pw'\neof\n");
 		expect(r.code).toBe(0);
 	});
 });
 
 describe("rootGuardArgs", () => {
-	it("räumt bei TERM die Prozessgruppe ab", async () => {
+	it("cleans up the process group on TERM", async () => {
 		const f = path.join(dir, "pids");
 		const { child, done } = run(`exec ${rootGuardArgs(`sleep 100 & echo $! > ${f}; sleep 100`)}`);
 		const [pid] = await readPids(f, 1);
@@ -117,7 +117,7 @@ describe("rootGuardArgs", () => {
 		await waitFor(() => !alive(pid), 1000);
 	});
 
-	it("reicht ohne Signal den Exit-Code durch", async () => {
+	it("passes through the exit code without a signal", async () => {
 		const { done } = run(rootGuardArgs(`exit 7`));
 		expect((await done).code).toBe(7);
 	});

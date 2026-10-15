@@ -1,33 +1,33 @@
 /**
- * Brave Web Search — custom Pi-Tool über die Brave „LLM Context“-API.
+ * Brave Web Search — custom Pi tool using the Brave "LLM Context" API.
  *
  * Der LLM-Context-Endpoint (POST https://api.search.brave.com/res/v1/llm/context)
- * ist genau für Agents gemacht: Er liefert nicht nur URLs, sondern bereits
- * vor-extrahierte, LLM-optimierte Content-Snippets (Text, Tabellen, Code,
- * Forums-/Captions-Inhalte) inkl. Quellen-Metadaten (Titel, Hostname, Datum).
- * Kein Scraping nötig – die LLM-Anbindung bekommt gebrauchsfertigen Context
- * in einem einzigen Call. (Statt klassischer Web Search mit Linklisten.)
+ * is built specifically for agents: it returns not just URLs, but already
+ * pre-extracted, LLM-optimized content snippets (text, tables, code,
+ * forum/caption content) incl. source metadata (title, hostname, date).
+ * No scraping needed – the LLM integration gets ready-to-use context
+ * in a single call. (Instead of classic web search with link lists.)
  *
- * API-Key (bewusst NICHT im Repo/Nix, s. AGENTS.md). Priorität:
- *   1. macOS Keychain (primär): Service „pi-brave-search“ / Account „api-key".
- *      - Speichern bequem per `/brave-key set` (liest die Zwischenablage)
- *      - oder manuell: security add-generic-password -s "pi-brave-search" \
+ * API key (deliberately NOT committed to the repo). Priority:
+ *   1. macOS Keychain (primary): service "pi-brave-search" / account "api-key".
+ *      - Conveniently store it via `/brave-key set` (reads the clipboard)
+ *      - or manually: security add-generic-password -s "pi-brave-search" \
  *          -a "api-key" -w "<KEY>"
- *   2. Env-Var:   BRAVE_API_KEY=<key>
- *   3. Datei:     ~/.config/brave/api-key  (eine Zeile, nicht versioniert)
- *   Key besorgen: https://api-dashboard.search.brave.com
+ *   2. Env var:   BRAVE_API_KEY=<key>
+ *   3. File:      ~/.config/brave/api-key  (one line, not versioned)
+ *   Get a key: https://api-dashboard.search.brave.com
  *
- * Der Key wird bei jedem Tool-Call aus der Keychain gelesen („security
- * find-generic-password -w“). Das läuft über den Subprozess `/usr/bin/security`
- * — falls macOS einmal fragt, ob „security“ auf den Eintrag zugreifen darf,
- * einmal erlauben („Allow always / Immer erlauben“).
+ * The key is read from the Keychain on every tool call ("security
+ * find-generic-password -w"). This runs via the subprocess `/usr/bin/security`
+ * — if macOS ever asks whether "security" may access the entry,
+ * allow it once ("Always Allow").
  *
- * Live testen ohne `make darwin` (aus diesem Repo):
- *   pi -e ./brave-search/brave-search.ts        → Brave Web Search Tool
- *   /brave-key set                               → Key aus Zwischenablage in Keychain
- *   /brave-test                                  → Key + Endpoint prüfen
- * Ein netter Umweg: Das Tool wird nach `make darwin` (Symlink in
- * ~/.pi/agent/extensions/) automatisch entdeckt und per /reload aktualisiert.
+ * Test live without `make darwin` (from this repo):
+ *   pi -e ./brave-search/brave-search.ts        → Brave Web Search tool
+ *   /brave-key set                               → key from clipboard into Keychain
+ *   /brave-test                                  → check key + endpoint
+ * A nice side effect: after `make darwin` (symlink in
+ * ~/.pi/agent/extensions/) the tool is discovered automatically and updated via /reload.
  */
 
 import { execFile } from "node:child_process";
@@ -47,13 +47,13 @@ import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
 const ENDPOINT = "https://api.search.brave.com/res/v1/llm/context";
-const TIMEOUT_MS = 30_000; // Brave-Empfehlung: 30s Timeout
+const TIMEOUT_MS = 30_000; // Brave recommendation: 30s timeout
 const MAX_ATTEMPTS = 3;
 
 // ---------------------------------------------------------------------------
-// API-Key: macOS Keychain (primär), sonst Env-Var, sonst Datei.
-// Nie hardcoded, nie im Repo. Der Key verlässt nie den Rechner und wird
-// nie in den LLM-Context oder die Session-Datei geschrieben.
+// API key: macOS Keychain (primary), otherwise env var, otherwise file.
+// Never hardcoded, never in the repo. The key never leaves the machine and is
+// never written to the LLM context or the session file.
 // ---------------------------------------------------------------------------
 const KEYCHAIN_SERVICE = "pi-brave-search";
 const KEYCHAIN_ACCOUNT = "api-key";
@@ -69,12 +69,12 @@ async function keychainGet(): Promise<string | undefined> {
 		const v = stdout.trim();
 		return v || undefined;
 	} catch {
-		return undefined; // Eintrag existiert nicht (security exit != 0)
+		return undefined; // Entry does not exist (security exit != 0)
 	}
 }
 
 async function keychainSet(value: string): Promise<void> {
-	// -U: bereits vorhandenen Eintrag aktualisieren statt doppelt anzulegen
+	// -U: update an existing entry instead of creating a duplicate
 	await execFileAsync(
 		"/usr/bin/security",
 		["add-generic-password", "-s", KEYCHAIN_SERVICE, "-a", KEYCHAIN_ACCOUNT, "-w", value, "-U"],
@@ -90,11 +90,11 @@ async function keychainDelete(): Promise<void> {
 			{ timeout: 5000 },
 		);
 	} catch {
-		/* Eintrag existierte nicht */
+		/* Entry did not exist */
 	}
 }
 
-/** Liest die macOS-Zwischenablage (für /brave-key set). */
+/** Reads the macOS clipboard (for /brave-key set). */
 async function pbpaste(): Promise<string | undefined> {
 	try {
 		const { stdout } = await execFileAsync("/usr/bin/pbpaste", [], { timeout: 3000 });
@@ -105,7 +105,7 @@ async function pbpaste(): Promise<string | undefined> {
 	}
 }
 
-/** Kurz-Maske für Status-Anzeigen (nie den vollen Key zeigen). */
+/** Short mask for status displays (never show the full key). */
 function maskKey(key: string): string {
 	if (key.length <= 10) return "*".repeat(key.length);
 	return `${key.slice(0, 4)}…${key.slice(-4)}`;
@@ -127,19 +127,19 @@ async function resolveApiKey(): Promise<string | undefined> {
 			const v = fs.readFileSync(p, "utf8").trim();
 			if (v) return v;
 		} catch {
-			/* Datei existiert nicht -> nächster Kandidat */
+			/* File does not exist -> next candidate */
 		}
 	}
 	return undefined;
 }
 
 /**
- * Key für einen Tool-Call besorgen. Fehlt er, wird auf Wunsch einmal
- * interaktiv aus der Zwischenablage in die Keychain gelegt.
+ * Obtain the key for a tool call. If it is missing, on request it is
+ * stored once interactively from the clipboard into the Keychain.
  */
-// "success" ist kein offizielles notify-Level (Typen: info|warning|error),
-// wird von der TUI-Runtime aber gerendert (seit 08/2026 im Einsatz).
-// Bewusster Cast, Verhalten unverändert.
+// "success" is not an official notify level (types: info|warning|error),
+// but the TUI runtime renders it (in use since 08/2026).
+// Deliberate cast, behavior unchanged.
 function notifySuccess(ctx: { ui: ExtensionContext["ui"] }, message: string): void {
 	ctx.ui.notify(message, "success" as "info");
 }
@@ -150,28 +150,28 @@ async function ensureApiKey(ctx?: ExtensionContext): Promise<string> {
 
 	if (ctx?.ui && typeof ctx.ui.confirm === "function") {
 		const ok = await ctx.ui.confirm(
-			"Brave API-Key fehlt",
-			"Kein Key in Keychain/Env gefunden. Key in die Zwischenablage kopiert? " +
-				"Soll ich ihn jetzt in die macOS Keychain legen?".trim(),
+			"Brave API key missing",
+			"No key found in Keychain/env. Key copied to the clipboard? " +
+				"Should I store it in the macOS Keychain now?".trim(),
 		);
 		if (ok) {
 			const clip = await pbpaste();
 			if (clip) {
 				await keychainSet(clip);
-				notifySuccess(ctx, "Brave-API-Key in der Keychain gespeichert");
+				notifySuccess(ctx, "Brave API key saved to the Keychain");
 				return clip;
 			}
 		}
 	}
 
 	throw new Error(
-		"Kein Brave-API-Key gefunden. Setze ihn per /brave-key set (Zwischenablage), " +
-			"export BRAVE_API_KEY oder ~/.config/brave/api-key.",
+		"No Brave API key found. Set it via /brave-key set (clipboard), " +
+			"export BRAVE_API_KEY, or ~/.config/brave/api-key.",
 	);
 }
 
 // ---------------------------------------------------------------------------
-// HTTP: 30s-Timeout, Pi-Signal-Cancellation, Retry mit Backoff (429/5xx)
+// HTTP: 30s timeout, Pi signal cancellation, retry with backoff (429/5xx)
 // ---------------------------------------------------------------------------
 class RetryableError extends Error {
 	retryAfterMs: number;
@@ -216,7 +216,7 @@ async function fetchBraveContext(
 			return await doFetch(body, apiKey, externalSignal);
 		} catch (err) {
 			lastError = err as Error;
-			if (!(err instanceof RetryableError)) throw err; // harte Fehler sofort
+			if (!(err instanceof RetryableError)) throw err; // hard errors immediately
 			if (attempt + 1 >= MAX_ATTEMPTS) break;
 			await sleep(err.retryAfterMs);
 		}
@@ -271,7 +271,7 @@ async function doFetch(
 }
 
 // ---------------------------------------------------------------------------
-// Antwort → kompaktes, zitierfähiges Markdown
+// Response → compact, citable Markdown
 // ---------------------------------------------------------------------------
 function formatResults(query: string, data: BraveResponse): string {
 	const generic = data.grounding?.generic ?? [];
@@ -279,21 +279,21 @@ function formatResults(query: string, data: BraveResponse): string {
 
 	if (generic.length === 0) {
 		return (
-			`Keine relevanten Inhalte für „${query}“ gefunden. ` +
-			`Nicht verwechseln: leeres grounding.generic = kein Treffer. ` +
-			`Versuche eine andere Formulierung, breitere Begriffe oder passe country/search_lang an.`
+			`No relevant content found for "${query}". ` +
+			`Do not confuse: empty grounding.generic = no match. ` +
+			`Try a different phrasing, broader terms, or adjust country/search_lang.`
 		);
 	}
 
 	const totalSnippets = generic.reduce((n, g) => n + (g.snippets?.length ?? 0), 0);
 	const lines: string[] = [];
-	lines.push(`# Web-Suche: ${query}`);
-	lines.push(`Quellen: ${generic.length} · Snippets: ${totalSnippets}`);
+	lines.push(`# Web search: ${query}`);
+	lines.push(`Sources: ${generic.length} · Snippets: ${totalSnippets}`);
 
 	generic.forEach((g, i) => {
 		const src = sources[g.url ?? ""];
 		const date = src?.age?.[0] ? `  (${src.age[0]})` : "";
-		const title = g.title ?? src?.title ?? g.url ?? `Quelle ${i + 1}`;
+		const title = g.title ?? src?.title ?? g.url ?? `Source ${i + 1}`;
 		lines.push(`\n${i + 1}. ${title}${date}`);
 		if (g.url) lines.push(`   ${g.url}`);
 		for (const s of g.snippets ?? []) lines.push(`   - ${s}`);
@@ -312,7 +312,7 @@ function writeTempFile(content: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Details für TUI-Rendering
+// Details for TUI rendering
 // ---------------------------------------------------------------------------
 interface BraveDetails {
 	query: string;
@@ -411,10 +411,10 @@ export default function braveSearchExtension(pi: ExtensionAPI) {
 
 			const body: Record<string, unknown> = {
 				q: params.q,
-				enable_source_metadata: true, // stellt description/site_name bereit
+				enable_source_metadata: true, // provides description/site_name
 			};
 
-			// Nur gesetzte optionale Parameter mitschicken
+			// Only send optional parameters that are set
 			const optionalInts = [
 				"count",
 				"maximum_number_of_urls",
@@ -461,8 +461,8 @@ export default function braveSearchExtension(pi: ExtensionAPI) {
 
 			let text = formatResults(params.q, data);
 
-			// Sicherheitsnetz: Snippets sind zwar token-budgetiert, aber schützen
-			// vor riesigen Antworten (Limit: 50KB / 2000 Zeilen).
+			// Safety net: snippets are token-budgeted, but this protects
+			// against huge responses (limit: 50KB / 2000 lines).
 			const truncation = truncateHead(text, {
 				maxLines: DEFAULT_MAX_LINES,
 				maxBytes: DEFAULT_MAX_BYTES,
@@ -471,16 +471,16 @@ export default function braveSearchExtension(pi: ExtensionAPI) {
 				details.truncated = true;
 				const tmp = writeTempFile(text);
 				const tail =
-					`\n\n[Output gekürzt: ${truncation.outputLines}/${truncation.totalLines} Zeilen ` +
+					`\n\n[Output truncated: ${truncation.outputLines}/${truncation.totalLines} lines ` +
 					`(${formatSize(truncation.outputBytes)}/${formatSize(truncation.totalBytes)}). ` +
-					`Komplett gespeichert: ${tmp}]`;
+					`Saved in full: ${tmp}]`;
 				text = truncation.content + tail;
 			}
 
 			return { content: [{ type: "text", text }], details };
 		},
 
-		// Kompaktes TUI-Rendering (erweitert für Quellenliste)
+		// Compact TUI rendering (extended for source list)
 		renderCall(args, theme) {
 			const textArgs = args as { q?: string };
 			let t = theme.fg("toolTitle", theme.bold("Brave Web Search"));
@@ -489,23 +489,23 @@ export default function braveSearchExtension(pi: ExtensionAPI) {
 		},
 
 		renderResult(result, { expanded, isPartial }, theme, context) {
-			if (isPartial) return new Text(theme.fg("muted", "Brave-Suche läuft…"), 0, 0);
+			if (isPartial) return new Text(theme.fg("muted", "Brave search running…"), 0, 0);
 
 			if (context.isError) {
 				const msg =
 					result.content?.[0]?.type === "text"
 						? result.content[0].text.split("\n")[0]
-						: "Fehler bei der Brave-Suche";
+						: "Error during Brave search";
 				return new Text(theme.fg("error", msg), 0, 0);
 			}
 
 			const details = result.details as BraveDetails | undefined;
-			if (!details) return new Text(theme.fg("dim", "Brave-Suche"), 0, 0);
+			if (!details) return new Text(theme.fg("dim", "Brave search"), 0, 0);
 
-			let t = theme.fg("success", `✓ ${details.resultCount} Quellen`);
+			let t = theme.fg("success", `✓ ${details.resultCount} sources`);
 			if (details.totalSnippets > 0) t += theme.fg("muted", ` · ${details.totalSnippets} Snippets`);
 			if (details.tokenBudget != null) t += theme.fg("muted", ` · ${details.tokenBudget} Tokens`);
-			if (details.truncated) t += theme.fg("warning", " · gekürzt");
+			if (details.truncated) t += theme.fg("warning", " · truncated");
 
 			if (expanded && details.sources.length) {
 				for (const s of details.sources.slice(0, 20)) {
@@ -517,19 +517,19 @@ export default function braveSearchExtension(pi: ExtensionAPI) {
 		},
 	});
 
-	// Schneller Key-/Connectivity-Check ohne echte Suche
+	// Quick key/connectivity check without a real search
 	pi.registerCommand("brave-test", {
-		description: "Brave-Suche: API-Key und Endpoint testen",
+		description: "Brave search: test API key and endpoint",
 		handler: async (_args, ctx) => {
 			const apiKey = await resolveApiKey();
 			if (!apiKey) {
 				ctx.ui.notify(
-					"Brave-API-Key fehlt — /brave-key set (Zwischenablage) oder BRAVE_API_KEY (Env) nutzen",
+					"Brave API key missing — use /brave-key set (clipboard) or BRAVE_API_KEY (env)",
 					"warning",
 				);
 				return;
 			}
-			ctx.ui.notify("Teste Brave-API…", "info");
+			ctx.ui.notify("Testing Brave API…", "info");
 			const t0 = Date.now();
 			try {
 				const data = await fetchBraveContext(
@@ -538,17 +538,17 @@ export default function braveSearchExtension(pi: ExtensionAPI) {
 				);
 				const ms = Date.now() - t0;
 				const hits = data.grounding?.generic?.length ?? 0;
-				notifySuccess(ctx, `OK: ${hits} Quellen in ${ms}ms (Key gültig)`);
+				notifySuccess(ctx, `OK: ${hits} sources in ${ms}ms (key valid)`);
 			} catch (err) {
-				ctx.ui.notify(`Fehler: ${(err as Error).message}`, "error");
+				ctx.ui.notify(`Error: ${(err as Error).message}`, "error");
 			}
 		},
 	});
 
-	// API-Key-Verwaltung: macOS Keychain (Service „pi-brave-search“)
+	// API key management: macOS Keychain (service "pi-brave-search")
 	pi.registerCommand("brave-key", {
 		description:
-			"Brave-API-Key in der macOS Keychain verwalten: /brave-key [status|set [KEY]|delete]",
+			"Manage the Brave API key in the macOS Keychain: /brave-key [status|set [KEY]|delete]",
 		getArgumentCompletions: (prefix) => {
 			const verbs = ["status", "set", "delete"];
 			const p = prefix.toLowerCase();
@@ -561,44 +561,41 @@ export default function braveSearchExtension(pi: ExtensionAPI) {
 
 			if (verb === "set") {
 				let key = payload;
-				let source = "Argument";
+				let source = "argument";
 				if (!key) {
 					const clip = await pbpaste();
 					if (clip) {
 						key = clip;
-						source = "Zwischenablage";
+						source = "clipboard";
 					}
 				}
 				if (!key) {
 					ctx.ui.notify(
-						"Kein Key gefunden. Nutzung: /brave-key set <KEY> — oder den Key vorher in die Zwischenablage kopieren",
+						"No key found. Usage: /brave-key set <KEY> — or copy the key to the clipboard first",
 						"warning",
 					);
 					return;
 				}
 				try {
 					await keychainSet(key.trim());
-					notifySuccess(
-						ctx,
-						`Brave-API-Key gespeichert (${source}) → Keychain „${KEYCHAIN_SERVICE}“`,
-					);
+					notifySuccess(ctx, `Brave API key saved (${source}) → Keychain "${KEYCHAIN_SERVICE}"`);
 				} catch (err) {
-					ctx.ui.notify(`Konnte Keychain nicht schreiben: ${(err as Error).message}`, "error");
+					ctx.ui.notify(`Could not write to Keychain: ${(err as Error).message}`, "error");
 				}
 				return;
 			}
 
 			if (verb === "delete") {
 				const ok = await ctx.ui.confirm(
-					"Brave-API-Key löschen?",
-					`Der Eintrag „${KEYCHAIN_SERVICE}/${KEYCHAIN_ACCOUNT}“ wird aus der Keychain entfernt.`,
+					"Delete Brave API key?",
+					`The entry "${KEYCHAIN_SERVICE}/${KEYCHAIN_ACCOUNT}" will be removed from the Keychain.`,
 				);
 				if (!ok) {
-					ctx.ui.notify("Abgebrochen", "info");
+					ctx.ui.notify("Cancelled", "info");
 					return;
 				}
 				await keychainDelete();
-				notifySuccess(ctx, "Brave-API-Key aus der Keychain entfernt");
+				notifySuccess(ctx, "Brave API key removed from the Keychain");
 				return;
 			}
 
@@ -606,18 +603,18 @@ export default function braveSearchExtension(pi: ExtensionAPI) {
 			const key = await resolveApiKey();
 			if (!key) {
 				ctx.ui.notify(
-					"Kein Brave-API-Key gefunden. /brave-key set (Key vorher in die Zwischenablage kopieren)",
+					"No Brave API key found. /brave-key set (copy the key to the clipboard first)",
 					"warning",
 				);
 				return;
 			}
 			const keychainStored = (await keychainGet()) === key;
 			const source = keychainStored
-				? `Keychain „${KEYCHAIN_SERVICE}“`
+				? `Keychain "${KEYCHAIN_SERVICE}"`
 				: key === (process.env.BRAVE_API_KEY ?? "").trim()
-					? "Env-Var BRAVE_API_KEY"
-					: "Datei ~/.config/brave/api-key";
-			notifySuccess(ctx, `Brave-API-Key: ${maskKey(key)} (Quelle: ${source})`);
+					? "env var BRAVE_API_KEY"
+					: "file ~/.config/brave/api-key";
+			notifySuccess(ctx, `Brave-API-Key: ${maskKey(key)} (source: ${source})`);
 		},
 	});
 }

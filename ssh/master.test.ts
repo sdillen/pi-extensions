@@ -9,7 +9,7 @@ const { spawnSyncMock, rmSyncMock } = vi.hoisted(() => ({
 vi.mock("node:child_process", () => ({ spawnSync: spawnSyncMock }));
 vi.mock("node:fs", () => ({ rmSync: rmSyncMock }));
 
-// Nach den vi.mock-Aufrufen importieren, damit master.ts die Mocks bekommt.
+// Import after the vi.mock calls so that master.ts gets the mocks.
 const {
 	canRoundTrip,
 	cleanupMaster,
@@ -39,24 +39,24 @@ afterEach(() => {
 });
 
 describe("socketPathFor", () => {
-	it("legt den Socket unter ~/.ssh/controlmaster ab", () => {
+	it("places the socket under ~/.ssh/controlmaster", () => {
 		expect(socketPathFor(remote)).toBe(
 			`${process.env.HOME}/.ssh/controlmaster/user@example.org.sock`,
 		);
 	});
 
-	it("ersetzt gefährliche Zeichen, behält host:port", () => {
+	it("replaces dangerous characters, keeps host:port", () => {
 		const p = socketPathFor("usér@höst:1");
 		expect(p.endsWith("/controlmaster/us_r@h_st:1.sock")).toBe(true);
 	});
 });
 
 describe("sshCommandArgs", () => {
-	it("liefert ohne Socket nur den Remote", () => {
+	it("returns only the remote without a socket", () => {
 		expect(sshCommandArgs(remote)).toEqual([remote]);
 	});
 
-	it("reitet über den ControlMaster-Socket, sobald gesetzt", () => {
+	it("rides on the ControlMaster socket once set", () => {
 		setControlSocket(sock);
 		expect(sshCommandArgs(remote)).toEqual([
 			"-o",
@@ -67,7 +67,7 @@ describe("sshCommandArgs", () => {
 		]);
 	});
 
-	it("invalidateMaster setzt den Socket zurück", () => {
+	it("invalidateMaster resets the socket", () => {
 		setControlSocket(sock);
 		invalidateMaster();
 		expect(sshCommandArgs(remote)).toEqual([remote]);
@@ -75,7 +75,7 @@ describe("sshCommandArgs", () => {
 });
 
 describe("DEAD_MASTER", () => {
-	it("erkennt Zombie-Master-Symptome", () => {
+	it("detects zombie master symptoms", () => {
 		expect(DEAD_MASTER.test("read from master failed: Broken pipe")).toBe(true);
 		expect(DEAD_MASTER.test("Control socket connect(/tmp/x.sock): No such file or directory")).toBe(
 			true,
@@ -83,9 +83,9 @@ describe("DEAD_MASTER", () => {
 		expect(DEAD_MASTER.test("Control socket connect(/tmp/x.sock): Connection refused")).toBe(true);
 	});
 
-	it("schlägt bei harmlosen Meldungen nicht an", () => {
-		// Nur der Mux-Socket zählt: ein TCP-„Connection refused“ (Host down) ist
-		// ein anderer Fehler und soll keine Master-Recovery auslösen.
+	it("does not trigger on harmless messages", () => {
+		// Only the mux socket counts: a TCP "Connection refused" (host down) is
+		// a different error and must not trigger master recovery.
 		expect(DEAD_MASTER.test("ssh: connect to host port 22: Connection refused")).toBe(false);
 		expect(DEAD_MASTER.test("Everything is fine")).toBe(false);
 		expect(DEAD_MASTER.test("ls: cannot access '/x': No such file or directory")).toBe(false);
@@ -93,7 +93,7 @@ describe("DEAD_MASTER", () => {
 });
 
 describe("isSocketAlive", () => {
-	it("ruft ssh -O check mit ControlPath und ConnectTimeout auf", () => {
+	it("calls ssh -O check with ControlPath and ConnectTimeout", () => {
 		expect(isSocketAlive(sock, remote)).toBe(true);
 		expect(spawnSyncMock).toHaveBeenCalledWith(
 			"ssh",
@@ -102,12 +102,12 @@ describe("isSocketAlive", () => {
 		);
 	});
 
-	it("meldet false bei Exit-Code != 0", () => {
+	it("reports false on exit code != 0", () => {
 		spawnSyncMock.mockReturnValue({ status: 1 });
 		expect(isSocketAlive(sock, remote)).toBe(false);
 	});
 
-	it("meldet false, wenn ssh wirft", () => {
+	it("reports false when ssh throws", () => {
 		spawnSyncMock.mockImplementation(() => {
 			throw new Error("boom");
 		});
@@ -116,7 +116,7 @@ describe("isSocketAlive", () => {
 });
 
 describe("canRoundTrip", () => {
-	it("verlangt BatchMode und echten Befehl durch den Socket", () => {
+	it("requires BatchMode and a real command through the socket", () => {
 		expect(canRoundTrip(sock, remote)).toBe(true);
 		expect(spawnSyncMock).toHaveBeenCalledWith(
 			"ssh",
@@ -136,7 +136,7 @@ describe("canRoundTrip", () => {
 		);
 	});
 
-	it("meldet false bei Fehlschlag oder Exception", () => {
+	it("reports false on failure or exception", () => {
 		spawnSyncMock.mockReturnValue({ status: 2 });
 		expect(canRoundTrip(sock, remote)).toBe(false);
 
@@ -148,7 +148,7 @@ describe("canRoundTrip", () => {
 });
 
 describe("cleanupMaster", () => {
-	it("beendet den Master und entfernt den Socket", () => {
+	it("exits the master and removes the socket", () => {
 		cleanupMaster(sock, remote);
 		expect(spawnSyncMock).toHaveBeenCalledWith(
 			"ssh",
@@ -158,7 +158,7 @@ describe("cleanupMaster", () => {
 		expect(rmSyncMock).toHaveBeenCalledWith(sock, { force: true });
 	});
 
-	it("übersteht Fehler in ssh und fs", () => {
+	it("survives errors in ssh and fs", () => {
 		spawnSyncMock.mockImplementation(() => {
 			throw new Error("boom");
 		});
@@ -170,12 +170,12 @@ describe("cleanupMaster", () => {
 });
 
 describe("isMasterAlive", () => {
-	it("ohne Socket: false, ohne ssh aufzurufen", () => {
+	it("without a socket: false, without calling ssh", () => {
 		expect(isMasterAlive(remote)).toBe(false);
 		expect(spawnSyncMock).not.toHaveBeenCalled();
 	});
 
-	it("prüft den Socket und cached das Ergebnis 2 s", () => {
+	it("checks the socket and caches the result for 2 s", () => {
 		setControlSocket(sock);
 		expect(isMasterAlive(remote)).toBe(true);
 		expect(isMasterAlive(remote)).toBe(true);
@@ -186,7 +186,7 @@ describe("isMasterAlive", () => {
 		expect(spawnSyncMock).toHaveBeenCalledTimes(2);
 	});
 
-	it("neuer Socket invalidiert den Cache", () => {
+	it("a new socket invalidates the cache", () => {
 		setControlSocket(sock);
 		expect(isMasterAlive(remote)).toBe(true);
 		setControlSocket("/tmp/other.sock");
@@ -197,7 +197,7 @@ describe("isMasterAlive", () => {
 });
 
 describe("SSH_CONTROL_PERSIST", () => {
-	it("parst die Env-Variable (Default 43200)", async () => {
+	it("parses the env variable (default 43200)", async () => {
 		vi.resetModules();
 		vi.stubEnv("SSH_CONTROL_PERSIST", "60");
 		const fresh = await import("./master.ts");

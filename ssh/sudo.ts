@@ -1,14 +1,14 @@
 // ---------------------------------------------------------------------------
 // sudo password state + command rewriting
 //
-// Das Passwort lebt NUR in diesem Modul (Extension-Speicher), nie im
-// LLM-Context oder in der Session-Datei. Reine Logik ohne pi-Abhängigkeit –
-// daher direkt testbar.
+// The password lives ONLY in this module (extension memory), never in the
+// LLM context or in the session file. Pure logic without a pi dependency –
+// hence directly testable.
 // ---------------------------------------------------------------------------
 
 let sudoPass: string | null = null;
 let sudoPassAt = 0;
-export const SUDO_TTL_MS = 4 * 60 * 1000; // erneut fragen, wenn länger als 4 min her
+export const SUDO_TTL_MS = 4 * 60 * 1000; // ask again if more than 4 min ago
 
 export const isSudoFresh = () => sudoPass !== null && Date.now() - sudoPassAt < SUDO_TTL_MS;
 export function rememberSudo(pass: string) {
@@ -19,24 +19,24 @@ export function forgetSudo() {
 	sudoPass = null;
 }
 
-/** Rohwert für den `sudo -S`-stdin-Kanal – nur aus der Extension nutzen, nie loggen. */
+/** Raw value for the `sudo -S` stdin channel – use only from the extension, never log. */
 export function getSudoPass(): string | null {
 	return sudoPass;
 }
 
-// sudo am Kommandoanfang, auch hinter Wrappern wie `timeout 10`, `env X=1`,
-// `nice -n 5`; Gruppe 3 = direkt folgende sudo-Optionen
+// sudo at the start of a command, also behind wrappers like `timeout 10`,
+// `env X=1`, `nice -n 5`; group 3 = directly following sudo options
 const SUDO_RE =
 	/(^|[\n;&|(])(\s*(?:(?:timeout|nice|nohup|stdbuf|env|time)(?:\s+(?:-\S+|\d+(?:\.\d+)?[smhd]?|[A-Za-z_]\w*=\S*|[A-Z]+))*\s+)*)sudo\b((?:\s+-\S+)*)/;
 
-/** True wenn `command` sudo wirklich ausführt (nicht nur erwähnt). */
+/** True if `command` actually runs sudo (not merely mentions it). */
 export function usesSudo(command: string): boolean {
 	return SUDO_RE.test(command);
 }
 
 /**
- * Ersten sudo-Aufruf in `sudo -S -p ''` umwandeln; Rest liest stdin bereits ab.
- * `-n`/`--non-interactive` fliegt raus – sonst ignoriert sudo das Passwort auf stdin.
+ * Convert the first sudo call into `sudo -S -p ''`; the rest already reads stdin.
+ * `-n`/`--non-interactive` is dropped – otherwise sudo ignores the password on stdin.
  */
 export function injectSudoStdin(command: string): string {
 	return command.replace(SUDO_RE, (_m, sep: string, prefix: string, opts: string) => {

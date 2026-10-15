@@ -1,0 +1,39 @@
+{
+	"name": "@sdillen/pi-ssh",
+	"version": "0.1.0",
+	"description": "pi extension: run all tools on an SSH host, with sudo and YubiKey/ED25519-SK support via ControlMaster",
+	"license": "MIT",
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"pi",
+		"ssh",
+		"sudo",
+		"remote",
+		"yubikey"
+	],
+	"type": "module",
+	"pi": {
+		"extensions": [
+			"./index.ts"
+		]
+	},
+	"files": [
+		"*.ts",
+		"!*.test.ts",
+		"README.md",
+		"LICENSE"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/sdillen/pi-extensions.git",
+		"directory": "ssh"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*",
+		"@earendil-works/pi-tui": "*"
+	}
+}

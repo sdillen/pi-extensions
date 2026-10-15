@@ -1,16 +1,16 @@
 // ---------------------------------------------------------------------------
 // SSH ControlMaster / ControlPersist
 //
-// ED25519-SK (YubiKey/FIDO2) verlangt pro Authentifizierung PIN + Touch auf
-// einem echten TTY. pi startet ssh aber als Subprozess mit gepipter stdio
-// (kein TTY) → die Prompts hängen unsichtbar fest.
+// ED25519-SK (YubiKey/FIDO2) requires PIN + touch on a real TTY for each
+// authentication. pi, however, starts ssh as a subprocess with piped stdio
+// (no TTY) → the prompts hang invisibly.
 //
-// Lösung: Beim Session-Start wird einmalig interaktiv ein ControlMaster
-// etabliert (TUI anhalten, Terminal an `ssh -N -f -M` übergeben, User tippt
-// PIN und berührt den YubiKey). Danach reiten alle spawnSsh-Aufrufe über den
-// ControlMaster-Socket (ControlMaster=auto) und müssen nicht erneut
-// authentifizieren. ControlPersist hält den Socket nach der letzten
-// Verbindung noch SSH_CONTROL_PERSIST Sekunden am Leben.
+// Solution: at session start, a ControlMaster is established once
+// interactively (suspend the TUI, hand the terminal to `ssh -N -f -M`, the
+// user types the PIN and touches the YubiKey). After that, all spawnSsh calls
+// ride on the ControlMaster socket (ControlMaster=auto) and do not need to
+// authenticate again. ControlPersist keeps the socket alive for
+// SSH_CONTROL_PERSIST more seconds after the last connection.
 // ---------------------------------------------------------------------------
 
 import { spawnSync } from "node:child_process";
@@ -22,15 +22,15 @@ let sshControlSocket: string | null = null;
 
 export const SSH_CONTROL_PERSIST: number = (() => {
 	const raw = process.env.SSH_CONTROL_PERSIST;
-	if (raw === undefined) return 43200; // Default: 12 h
+	if (raw === undefined) return 43200; // default: 12 h
 	const n = parseInt(raw, 10);
 	return Number.isFinite(n) && n >= 0 ? n : 43200;
 })();
 
-/** Setzt den aktiven ControlMaster-Socket (von der interaktiven Priming-Routine). */
+/** Sets the active ControlMaster socket (from the interactive priming routine). */
 export function setControlSocket(socket: string | null): void {
 	sshControlSocket = socket;
-	// Cache invalidieren: ein neuer/kein Socket bedeutet neue Realität.
+	// Invalidate cache: a new/no socket means a new reality.
 	masterCheckKey = "";
 	masterCheckAt = 0;
 	masterCheckAlive = false;
@@ -45,7 +45,7 @@ export function socketPathFor(remote: string): string {
 	return path.join(os.homedir(), ".ssh", "controlmaster", `${safe}.sock`);
 }
 
-/** Prüft, ob ein ControlMaster am gegebenen Socket lebt (`ssh -O check`). */
+/** Checks whether a ControlMaster is alive at the given socket (`ssh -O check`). */
 export function isSocketAlive(socket: string, remote: string): boolean {
 	try {
 		const r = spawnSync(
@@ -60,11 +60,11 @@ export function isSocketAlive(socket: string, remote: string): boolean {
 }
 
 /**
- * Echter End-to-End-Roundtrip durch den Socket. `ssh -O check` akzeptiert auch
- * Zombie-Master: der Prozess lebt und meldet „Master running“, obwohl die
- * darunterliegende Verbindung tot ist – jeder Session-Request stirbt dann mit
- * „read from master failed: Broken pipe“. Ein `true` durch den Mux-Socket ist
- * der einzige zuverlässige Lebensnachweis.
+ * Real end-to-end roundtrip through the socket. `ssh -O check` also accepts
+ * zombie masters: the process is alive and reports "Master running" although
+ * the underlying connection is dead – every session request then dies with
+ * "read from master failed: Broken pipe". A `true` through the mux socket is
+ * the only reliable proof of life.
  */
 export function canRoundTrip(socket: string, remote: string): boolean {
 	try {
@@ -74,9 +74,9 @@ export function canRoundTrip(socket: string, remote: string): boolean {
 				"-o",
 				`ControlPath=${socket}`,
 				"-o",
-				"ControlMaster=no", // nie selbst in einen Verbindungsversuch fallen
+				"ControlMaster=no", // never fall into a connection attempt on our own
 				"-o",
-				"BatchMode=yes", // kein Prompt – nur der bestehende Socket zählt
+				"BatchMode=yes", // no prompt – only the existing socket counts
 				"-o",
 				"ConnectTimeout=3",
 				remote,
@@ -90,7 +90,7 @@ export function canRoundTrip(socket: string, remote: string): boolean {
 	}
 }
 
-/** Räumt einen (mutmaßlich toten) Master auf: sauber beenden, Socket entfernen. */
+/** Cleans up a (presumably dead) master: exit cleanly, remove the socket. */
 export function cleanupMaster(socket: string, remote: string): void {
 	try {
 		spawnSync(
@@ -110,20 +110,20 @@ export function cleanupMaster(socket: string, remote: string): void {
 	}
 }
 
-/** SSH-Argumente für Remote-Kommandos: über den ControlMaster reiten, sobald gesetzt. */
+/** SSH arguments for remote commands: ride on the ControlMaster once set. */
 export function sshCommandArgs(remote: string): string[] {
 	if (!sshControlSocket) return [remote];
-	// ControlMaster=no (statt auto): ein toter Socket schlägt SOFORT und erkennbar
-	// fehl (broken pipe / connect failed), statt still in einen neuen Verbindungsversuch
-	// zu fallen, der ohne TTY die YubiKey-PIN nicht abfragen kann.
+	// ControlMaster=no (instead of auto): a dead socket fails IMMEDIATELY and
+	// recognizably (broken pipe / connect failed), instead of silently falling
+	// into a new connection attempt, which cannot ask for the YubiKey PIN without a TTY.
 	return ["-o", `ControlPath=${sshControlSocket}`, "-o", "ControlMaster=no", remote];
 }
 
-/** Symptome eines toten/Zombie-ControlMasters in ssh-Ausgabe. */
+/** Symptoms of a dead/zombie ControlMaster in ssh output. */
 export const DEAD_MASTER =
 	/read from master failed|Broken pipe|Control socket connect\([^)]*\): (No such file or directory|Connection refused)/i;
 
-// Kurzzeit-Cache für isMasterAlive (spart pro Tool-Call einen `ssh -O check`).
+// Short-lived cache for isMasterAlive (saves one `ssh -O check` per tool call).
 let masterCheckKey = "";
 let masterCheckAt = 0;
 let masterCheckAlive = false;
@@ -140,7 +140,7 @@ export function isMasterAlive(remote: string): boolean {
 	return masterCheckAlive;
 }
 
-/** Setzt den Socket-Zustand zurück, wenn der Master gestorben ist. */
+/** Resets the socket state when the master has died. */
 export function invalidateMaster(): void {
 	sshControlSocket = null;
 	masterCheckKey = "";

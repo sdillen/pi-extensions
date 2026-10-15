@@ -1,27 +1,27 @@
 /**
- * Remote-Watchdog: sorgt dafür, dass ein Remote-Befehl stirbt, sobald der
- * ssh-Kanal zugeht (ESC, Timeout, lokaler Client tot, Netz/Master weg).
+ * Remote watchdog: ensures a remote command dies as soon as the ssh channel
+ * closes (ESC, timeout, local client dead, network/master gone).
  *
- * Ohne PTY gibt es remote kein SIGHUP beim Disconnect – der Prozess würde
- * verwaist weiterlaufen. Der Wrapper startet den Befehl deshalb in einer
- * eigenen Prozessgruppe (`set -m`) und lässt einen Watchdog auf stdin lauschen:
- * EOF heißt „Kanal zu“ → TERM an die ganze Gruppe, nach GUARD_GRACE_S KILL.
- * Lokal muss stdin dafür offen bleiben; abbrechen = stdin schließen.
+ * Without a PTY there is no SIGHUP on the remote at disconnect – the process
+ * would keep running orphaned. The wrapper therefore starts the command in its
+ * own process group (`set -m`) and has a watchdog listen on stdin:
+ * EOF means "channel closed" → TERM to the whole group, KILL after GUARD_GRACE_S.
+ * Locally, stdin must stay open for this; aborting = closing stdin.
  */
 
-/** Sekunden zwischen TERM und KILL. */
+/** Seconds between TERM and KILL. */
 export const GUARD_GRACE_S = 2;
 
-/** POSIX-sicheres Single-Quoting für die Remote-Shell. */
+/** POSIX-safe single quoting for the remote shell. */
 export const shq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
 
-// $1 = Befehl, $2 = "1": erste stdin-Zeile (sudo-Passwort) an den Befehl geben.
-// Der Watchdog liest fd 3 (sonst bekäme er als Background-Job /dev/null) und
-// ignoriert nach dem Auslösen TERM, damit ihn das Wrapper-Ende nicht vor dem
-// KILL-Schritt abräumt; seine Ausgaben gehen nach /dev/null, damit er den
-// Kanal nicht offen hält. Job-Meldungen von bash („[1]- Terminated …“, ab
-// bash 5.2 auch ohne TTY) landen auf dem Wrapper-stderr → /dev/null; nur der
-// Befehl bekommt den echten stderr über fd 4.
+// $1 = command, $2 = "1": pass the first stdin line (sudo password) to the command.
+// The watchdog reads fd 3 (otherwise, as a background job, it would get /dev/null)
+// and ignores TERM after triggering, so that the wrapper exiting does not reap
+// it before the KILL step; its output goes to /dev/null so it does not keep
+// the channel open. Job messages from bash ("[1]- Terminated …", also without
+// a TTY since bash 5.2) end up on the wrapper stderr → /dev/null; only the
+// command gets the real stderr via fd 4.
 const GUARD = `set -m
 exec 3<&0 4>&2 2>/dev/null
 if [ "$2" = 1 ]; then
@@ -40,9 +40,9 @@ wait $pid; rc=$?
 kill -- -$wd 2>/dev/null
 exit $rc`;
 
-// Läuft als root unter sudo: der User-Watchdog kann root-Prozesse nicht
-// killen, aber sudo reicht sein TERM/HUP an diesen Wrapper weiter, der die
-// root-Prozessgruppe dann selbst abräumt.
+// Runs as root under sudo: the user watchdog cannot kill root processes,
+// but sudo forwards its TERM/HUP to this wrapper, which then cleans up the
+// root process group itself.
 const ROOT_GUARD = `set -m
 exec 4>&2 2>/dev/null
 bash -c "$1" </dev/null 2>&4 4>&- &
@@ -52,12 +52,12 @@ trap 'kill -TERM -- -$pid
   exit 143' TERM HUP INT
 wait $pid`;
 
-/** Hüllt `command` in den Watchdog; `passLine`: erste stdin-Zeile geht an den Befehl. */
+/** Wraps `command` in the watchdog; `passLine`: the first stdin line goes to the command. */
 export function guardCommand(command: string, passLine = false): string {
 	return `bash -c ${shq(GUARD)} pi-guard ${shq(command)}${passLine ? " 1" : ""}`;
 }
 
-/** Für `sudo … bash -c`: räumt die root-Prozessgruppe ab, wenn sudo TERM/HUP weiterreicht. */
+/** For `sudo … bash -c`: cleans up the root process group when sudo forwards TERM/HUP. */
 export function rootGuardArgs(command: string): string {
 	return `bash -c ${shq(ROOT_GUARD)} pi-guard ${shq(command)}`;
 }
