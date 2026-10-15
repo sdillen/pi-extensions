@@ -1,15 +1,20 @@
 name: Publish
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
   id-token: write
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,13 +24,20 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
+      # Trusted publishing needs npm >= 11.5.1
+      - run: npm install -g npm@latest
+
       - run: npm ci
 
-      - name: Test
-        run: npm test
+      - run: npm test
 
-      - name: Publish @sdillen/pi-ssh
-        run: npm publish --workspace ssh --access public
-
-      - name: Publish @sdillen/pi-brave-search
-        run: npm publish --workspace brave-search --access public
+      # With pending changesets: opens or updates the "Version Packages" PR.
+      # Without pending changesets: publishes unpublished versions to npm.
+      - uses: changesets/action@v1
+        with:
+          version: npx changeset version
+          publish: npx changeset publish
+          commit: "chore: version packages"
+          title: "chore: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
