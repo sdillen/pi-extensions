@@ -1,6 +1,6 @@
 {
 	"name": "@sdillen/pi-brave-search",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "pi extension: web search via the Brave LLM Context API",
 	"license": "MIT",
 	"keywords": [
