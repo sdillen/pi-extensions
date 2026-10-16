@@ -85,7 +85,7 @@ import {
  * - the raw value leaves the component exclusively via `done(value)`
  * - full editing: Backspace, Del, cursor, ctrl+u, ctrl+w, Paste
  */
-class MaskedPasswordPrompt implements Component, Focusable {
+export class MaskedPasswordPrompt implements Component, Focusable {
 	focused = false;
 	private raw = "";
 	private cursor = 0; // index into [...raw]
@@ -195,11 +195,13 @@ class MaskedPasswordPrompt implements Component, Focusable {
 		// masked line with horizontal scrolling + fake cursor (like pi input)
 		const prompt = "> ";
 		const avail = Math.max(1, inner - 2);
+		// room for the masked text: avail minus prompt and the cursor cell
+		const room = Math.max(0, avail - prompt.length - 1);
 		const mask = "*".repeat(this.raw.length);
 		let visible = mask;
 		let cursorCol = this.cursor;
-		if (mask.length > avail - 1) {
-			const start = mask.length - (avail - 1);
+		if (mask.length > room) {
+			const start = mask.length - room;
 			visible = mask.slice(start);
 			cursorCol = Math.max(0, this.cursor - start);
 		}
@@ -209,8 +211,9 @@ class MaskedPasswordPrompt implements Component, Focusable {
 		const after = visible.slice(cursorCol + atCursor.length);
 		const marker = this.focused ? CURSOR_MARKER : "";
 		const content = before + marker + `\x1b[7m${atCursor}\x1b[27m` + after;
-		const pad = " ".repeat(Math.max(0, avail - (prompt.length + visible.length)));
-		const bodyLine = (prompt + content).slice(0, avail) + pad;
+		// visible width without escape sequences (CURSOR_MARKER, SGR)
+		const used = prompt.length + visibleChars.length + (cursorCol >= visibleChars.length ? 1 : 0);
+		const bodyLine = prompt + content + " ".repeat(Math.max(0, avail - used));
 
 		const hint = "Enter = accept · Esc = cancel";
 		const top = `┌${"─".repeat(inner)}┐`;
@@ -218,7 +221,7 @@ class MaskedPasswordPrompt implements Component, Focusable {
 		const blank = `│${" ".repeat(inner)}│`;
 		const titleLine = `│ ${tr(this.title, inner - 2).padEnd(inner - 2)} │`;
 		const hintLine = `│ ${tr(hint, inner - 2).padEnd(inner - 2)} │`;
-		const body = `│ ${bodyLine.slice(0, avail).padEnd(avail)} │`;
+		const body = `│ ${bodyLine} │`;
 		return [top, titleLine, blank, body, blank, hintLine, bottom];
 	}
 }
