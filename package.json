@@ -10,6 +10,7 @@
 		"brave-search"
 	],
 	"scripts": {
+		"build": "npm run build --workspaces --if-present",
 		"typecheck": "tsc --noEmit",
 		"typecheck:watch": "tsc --noEmit --watch",
 		"lint": "biome check",

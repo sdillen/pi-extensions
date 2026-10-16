@@ -14,11 +14,15 @@
 	"type": "module",
 	"pi": {
 		"extensions": [
-			"./brave-search.ts"
+			"./dist/brave-search.js"
 		]
 	},
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"prepack": "npm run build"
+	},
 	"files": [
-		"brave-search.ts",
+		"dist",
 		"README.md",
 		"LICENSE"
 	],

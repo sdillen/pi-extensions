@@ -15,12 +15,15 @@
 	"type": "module",
 	"pi": {
 		"extensions": [
-			"./index.ts"
+			"./dist/index.js"
 		]
 	},
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"prepack": "npm run build"
+	},
 	"files": [
-		"*.ts",
-		"!*.test.ts",
+		"dist",
 		"README.md",
 		"LICENSE"
 	],
