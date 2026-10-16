@@ -1,5 +1,11 @@
 # @sdillen/pi-brave-search
 
+## 0.1.3
+
+### Patch Changes
+
+- 42618c0: Ship compiled JavaScript from `dist/` instead of TypeScript sources.
+
 ## 0.1.2
 
 ### Patch Changes
