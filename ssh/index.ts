@@ -73,6 +73,7 @@ import {
 	injectSudoStdin,
 	isSudoFresh,
 	rememberSudo,
+	touchSudo,
 	usesSudo,
 } from "./sudo.ts";
 
@@ -647,6 +648,7 @@ async function execWithSudoPass(
 	let pass: string | undefined;
 	if (isSudoFresh()) {
 		pass = getSudoPass()!;
+		touchSudo();
 	} else {
 		forgetSudo();
 		pass = await promptSudoPassword(ctx, remote, reason);

@@ -18,6 +18,10 @@ export function rememberSudo(pass: string) {
 export function forgetSudo() {
 	sudoPass = null;
 }
+/** Sliding window: each use of the cached password restarts the TTL. */
+export function touchSudo() {
+	if (sudoPass !== null) sudoPassAt = Date.now();
+}
 
 /** Raw value for the `sudo -S` stdin channel – use only from the extension, never log. */
 export function getSudoPass(): string | null {

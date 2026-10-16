@@ -6,6 +6,7 @@ import {
 	isSudoFresh,
 	rememberSudo,
 	SUDO_TTL_MS,
+	touchSudo,
 	usesSudo,
 } from "./sudo.ts";
 
@@ -94,6 +95,21 @@ describe("sudo password state", () => {
 		rememberSudo("secret");
 		forgetSudo();
 		expect(getSudoPass()).toBeNull();
+		expect(isSudoFresh()).toBe(false);
+	});
+
+	it("touchSudo restarts the TTL (sliding window)", () => {
+		rememberSudo("secret");
+		vi.advanceTimersByTime(SUDO_TTL_MS - 1000);
+		touchSudo();
+		vi.advanceTimersByTime(SUDO_TTL_MS - 1000);
+		expect(isSudoFresh()).toBe(true);
+		vi.advanceTimersByTime(1000);
+		expect(isSudoFresh()).toBe(false);
+	});
+
+	it("touchSudo does nothing without a remembered password", () => {
+		touchSudo();
 		expect(isSudoFresh()).toBe(false);
 	});
 });
