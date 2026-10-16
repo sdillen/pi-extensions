@@ -1,5 +1,11 @@
 # @sdillen/pi-ssh
 
+## 0.2.1
+
+### Patch Changes
+
+- a2b6ffb: Fix the sudo password dialog: the closing border of the input line no longer shifts left, and long passwords no longer overflow the frame.
+
 ## 0.2.0
 
 ### Minor Changes
