@@ -1,5 +1,11 @@
 # @sdillen/pi-brave-search
 
+## 0.1.2
+
+### Patch Changes
+
+- 556f6f0: Declare `typebox` as a peer dependency instead of a regular dependency. This fixes the extension loader warning for host-provided packages and avoids loading a duplicate copy of `typebox`.
+
 ## 0.1.1
 
 ### Patch Changes
