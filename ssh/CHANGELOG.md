@@ -1,5 +1,11 @@
 # @sdillen/pi-ssh
 
+## 0.2.2
+
+### Patch Changes
+
+- 42618c0: Ship compiled JavaScript from `dist/` instead of TypeScript sources.
+
 ## 0.2.1
 
 ### Patch Changes
