@@ -263,6 +263,14 @@ async function promptSudoPassword(
 
 const AUTH_TIMEOUT_MS = 120_000; // PIN + touch must succeed within 2 min
 
+/** Default timeout (seconds) for remote bash/sudo calls without an explicit one. */
+const REMOTE_DEFAULT_TIMEOUT_S = 300;
+
+const withRemoteTimeout = <T extends { timeout?: number }>(params: T): T => ({
+	...params,
+	timeout: params.timeout ?? REMOTE_DEFAULT_TIMEOUT_S,
+});
+
 /**
  * Establishes a ControlMaster interactively (PIN + touch for ED25519-SK).
  * Suspends the TUI, hands the terminal to `ssh -N -f -o ControlMaster=auto`
@@ -743,7 +751,7 @@ export default function (pi: ExtensionAPI) {
 				const tool = createBashTool(localCwd, {
 					operations: createRemoteBashOps(ssh.remote, ssh.remoteCwd, localCwd, ctx),
 				});
-				return tool.execute(id, params, signal, onUpdate);
+				return tool.execute(id, withRemoteTimeout(params), signal, onUpdate);
 			}
 			return localBash.execute(id, params, signal, onUpdate);
 		},
@@ -759,7 +767,7 @@ export default function (pi: ExtensionAPI) {
 		// reuse the bash renderer, label the call line as `sudo $ …`
 		renderCall(args, theme, context) {
 			const text = bashDef.renderCall!(args, theme, context) as Text;
-			const timeout = args?.timeout ? theme.fg("muted", ` (timeout ${args.timeout}s)`) : "";
+			const timeout = theme.fg("muted", ` (timeout ${args?.timeout ?? REMOTE_DEFAULT_TIMEOUT_S}s)`);
 			text.setText(theme.fg("toolTitle", theme.bold(`sudo $ ${args?.command || "..."}`)) + timeout);
 			return text;
 		},
@@ -768,7 +776,7 @@ export default function (pi: ExtensionAPI) {
 			"Execute a bash command as root on the SSH remote host. Pass the command WITHOUT a leading " +
 			'"sudo"; it runs via `sudo bash -c`, so pipes, && and redirects all run as root. The sudo ' +
 			"password is requested from the user and supplied automatically; the call never hangs waiting " +
-			"for a password. Output, truncation and the optional timeout (seconds) behave like the bash tool.",
+			`for a password. Output and truncation behave like the bash tool; timeout (seconds) defaults to ${REMOTE_DEFAULT_TIMEOUT_S}.`,
 		promptSnippet: "Execute a bash command as root on the SSH remote host",
 		promptGuidelines: [
 			"Use the sudo tool for every command that needs root on the SSH remote; the bash tool rejects sudo there.",
@@ -795,7 +803,7 @@ export default function (pi: ExtensionAPI) {
 			const tool = createBashTool(localCwd, {
 				operations: createRemoteSudoOps(ssh.remote, ssh.remoteCwd, localCwd, ctx),
 			});
-			return tool.execute(id, params, signal, onUpdate);
+			return tool.execute(id, withRemoteTimeout(params), signal, onUpdate);
 		},
 	});
 
