@@ -1,5 +1,11 @@
 # @sdillen/pi-ssh
 
+## 0.2.3
+
+### Patch Changes
+
+- 2313f51: Run the sudo tool sequentially so parallel sudo calls share a single password prompt.
+
 ## 0.2.2
 
 ### Patch Changes
