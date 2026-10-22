@@ -768,6 +768,9 @@ export default function (pi: ExtensionAPI) {
 		...localBash,
 		name: "sudo",
 		label: "sudo",
+		// Parallel sudo calls would each see an empty password cache and open
+		// their own password dialog; sequential mode queues them behind one prompt.
+		executionMode: "sequential",
 		// Without a built-in counterpart, pi would otherwise render only generically (without the command):
 		// reuse the bash renderer, label the call line as `sudo $ …`
 		renderCall(args, theme, context) {
