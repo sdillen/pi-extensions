@@ -851,9 +851,10 @@ export default function (pi: ExtensionAPI) {
 		let remote: string;
 		let remoteCwd: string | null = null;
 		if (arg.includes(":")) {
-			const [r, p] = arg.split(":");
-			remote = r;
-			remoteCwd = p;
+			// only the first colon separates host and path; the path may contain colons
+			const sep = arg.indexOf(":");
+			remote = arg.slice(0, sep);
+			remoteCwd = arg.slice(sep + 1);
 		} else {
 			remote = arg;
 		}
