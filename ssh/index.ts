@@ -405,7 +405,10 @@ async function primeControlMaster(ctx: ExtensionContext, remote: string): Promis
 
 interface SshResult {
 	exitCode: number;
+	/** stdout and stderr interleaved, for messages and text */
 	output: string;
+	/** stdout only, byte-exact (file contents) */
+	raw: Buffer;
 }
 
 /**
@@ -479,6 +482,7 @@ async function spawnSsh(
 			const stderr = child.stderr!;
 			const stdin = child.stdin!;
 			const chunks: Buffer[] = [];
+			const stdoutChunks: Buffer[] = [];
 			let timedOut = false;
 			let killTimer: NodeJS.Timeout | undefined;
 
@@ -499,6 +503,7 @@ async function spawnSsh(
 
 			stdout.on("data", (d: Buffer) => {
 				chunks.push(d);
+				stdoutChunks.push(d);
 				opts.onData?.(d);
 			});
 			stderr.on("data", (d: Buffer) => {
@@ -526,7 +531,7 @@ async function spawnSsh(
 				const output = Buffer.concat(chunks).toString();
 				if (opts.signal?.aborted) reject(new Error("aborted"));
 				else if (timedOut) reject(new Error(`timeout:${opts.timeout}`));
-				else resolve({ exitCode: code ?? -1, output });
+				else resolve({ exitCode: code ?? -1, output, raw: Buffer.concat(stdoutChunks) });
 			});
 		});
 
@@ -546,7 +551,11 @@ function createRemoteReadOps(remote: string, remoteCwd: string, localCwd: string
 	const toRemote = (p: string) =>
 		p.startsWith(localCwd) ? remoteCwd + p.slice(localCwd.length) : p;
 	return {
-		readFile: (p) => spawnSsh(remote, `cat ${shq(toRemote(p))}`).then((r) => Buffer.from(r.output)),
+		readFile: (p) =>
+			spawnSsh(remote, `cat ${shq(toRemote(p))}`).then((r) => {
+				if (r.exitCode !== 0) throw new Error(`read failed: ${r.output}`);
+				return r.raw;
+			}),
 		access: (p) =>
 			spawnSsh(remote, `test -r ${shq(toRemote(p))}`).then((r) => {
 				if (r.exitCode !== 0) throw new Error("not readable");
