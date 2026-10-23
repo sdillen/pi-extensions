@@ -45,9 +45,10 @@ pi -e ./brave-search/brave-search.ts
   shown as `*`). It is never written to the LLM context or the session file. It is
   remembered for 4 minutes, after which pi asks again. A wrong password triggers one retry.
   `-n`/`-S` in the command are unnecessary and are removed.
-- **YubiKey / ED25519-SK**: one interactive authentication at session start (PIN + touch;
-  the TUI pauses briefly). After that, all remote calls go through a ControlMaster socket
-  (`~/.ssh/controlmaster/...`) and never ask again. If the master dies mid-session, pi
+- **YubiKey / ED25519-SK**: one interactive authentication at session start. Whatever `ssh`
+  asks for (for example PIN + touch on a YubiKey) is answered in the terminal; the TUI stays
+  suspended until the connection is established. After that, all remote calls go through a
+  ControlMaster socket (`~/.ssh/controlmaster/...`) and never ask again. If the master dies mid-session, pi
   re-authenticates once automatically. Lifetime after the last connection is
   `SSH_CONTROL_PERSIST` seconds (default 43200 = 12 h).
 - **Requirements**: bash on the remote host and a reachable SSH key.

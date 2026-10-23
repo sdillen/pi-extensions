@@ -4,7 +4,7 @@ A [pi](https://github.com/earendil-works/pi-coding-agent) extension that runs al
 
 - read/write/edit/bash and `!` commands execute remotely.
 - A dedicated `sudo` tool with a masked password dialog. The password is never written to the LLM context or the session file.
-- One-time interactive YubiKey / ED25519-SK authentication, then all calls reuse a ControlMaster socket.
+- One-time interactive authentication in the terminal (for example YubiKey / ED25519-SK PIN + touch, or a passphrase), then all calls reuse a ControlMaster socket.
 
 ## Install
 
