@@ -541,7 +541,10 @@ const WRONG_PW =
 // ---------------------------------------------------------------------------
 
 function createRemoteReadOps(remote: string, remoteCwd: string, localCwd: string): ReadOperations {
-	const toRemote = (p: string) => p.replace(localCwd, remoteCwd);
+	// Map only the local cwd prefix; String.replace would hit the first match anywhere
+	// and interpret `$&`-patterns in remoteCwd.
+	const toRemote = (p: string) =>
+		p.startsWith(localCwd) ? remoteCwd + p.slice(localCwd.length) : p;
 	return {
 		readFile: (p) => spawnSsh(remote, `cat ${shq(toRemote(p))}`).then((r) => Buffer.from(r.output)),
 		access: (p) =>
@@ -565,7 +568,10 @@ function createRemoteWriteOps(
 	remoteCwd: string,
 	localCwd: string,
 ): WriteOperations {
-	const toRemote = (p: string) => p.replace(localCwd, remoteCwd);
+	// Map only the local cwd prefix; String.replace would hit the first match anywhere
+	// and interpret `$&`-patterns in remoteCwd.
+	const toRemote = (p: string) =>
+		p.startsWith(localCwd) ? remoteCwd + p.slice(localCwd.length) : p;
 	return {
 		writeFile: async (p, content) => {
 			const r = await spawnSsh(
@@ -593,7 +599,10 @@ function createRemoteBashOps(
 	localCwd: string,
 	ctx: ExtensionContext,
 ): BashOperations {
-	const toRemote = (p: string) => p.replace(localCwd, remoteCwd);
+	// Map only the local cwd prefix; String.replace would hit the first match anywhere
+	// and interpret `$&`-patterns in remoteCwd.
+	const toRemote = (p: string) =>
+		p.startsWith(localCwd) ? remoteCwd + p.slice(localCwd.length) : p;
 
 	return {
 		exec: async (command, cwd, { onData, signal, timeout }) => {
@@ -621,7 +630,10 @@ function createRemoteSudoOps(
 	localCwd: string,
 	ctx: ExtensionContext,
 ): BashOperations {
-	const toRemote = (p: string) => p.replace(localCwd, remoteCwd);
+	// Map only the local cwd prefix; String.replace would hit the first match anywhere
+	// and interpret `$&`-patterns in remoteCwd.
+	const toRemote = (p: string) =>
+		p.startsWith(localCwd) ? remoteCwd + p.slice(localCwd.length) : p;
 
 	return {
 		exec: (command, cwd, { onData, signal, timeout }) =>
