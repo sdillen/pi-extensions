@@ -545,7 +545,11 @@ const WRONG_PW =
 // Tool operation overrides
 // ---------------------------------------------------------------------------
 
-function createRemoteReadOps(remote: string, remoteCwd: string, localCwd: string): ReadOperations {
+export function createRemoteReadOps(
+	remote: string,
+	remoteCwd: string,
+	localCwd: string,
+): ReadOperations {
 	// Map only the local cwd prefix; String.replace would hit the first match anywhere
 	// and interpret `$&`-patterns in remoteCwd.
 	const toRemote = (p: string) =>
@@ -572,7 +576,7 @@ function createRemoteReadOps(remote: string, remoteCwd: string, localCwd: string
 	};
 }
 
-function createRemoteWriteOps(
+export function createRemoteWriteOps(
 	remote: string,
 	remoteCwd: string,
 	localCwd: string,
