@@ -583,10 +583,11 @@ function createRemoteWriteOps(
 		p.startsWith(localCwd) ? remoteCwd + p.slice(localCwd.length) : p;
 	return {
 		writeFile: async (p, content) => {
-			const r = await spawnSsh(
-				remote,
-				`echo ${shq(Buffer.from(content).toString("base64"))} | base64 -d > ${shq(toRemote(p))}`,
-			);
+			// content goes via stdin: as a command argument it would hit the
+			// per-argument limit (~128 KiB) for larger files
+			const r = await spawnSsh(remote, `base64 -d > ${shq(toRemote(p))}`, {
+				stdin: Buffer.from(content).toString("base64"),
+			});
 			if (r.exitCode !== 0) throw new Error(`write failed: ${r.output}`);
 		},
 		mkdir: async (dir) => {
