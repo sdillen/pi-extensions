@@ -310,8 +310,6 @@ async function primeControlMaster(ctx: ExtensionContext, remote: string): Promis
 		return false;
 	}
 
-	ctx.ui.notify(`SSH: ${remote} – enter PIN, then touch the YubiKey`, "info");
-
 	const ok = await ctx.ui
 		.custom<boolean>((tui, _theme, _kb, done) => {
 			// Suspend the TUI → hand the terminal (canonical mode) to ssh
@@ -319,7 +317,7 @@ async function primeControlMaster(ctx: ExtensionContext, remote: string): Promis
 			process.stdout.write("\x1b[2J\x1b[H");
 			process.stdout.write(
 				`\x1b[1m>> SSH authentication for ${remote}\x1b[0m\n` +
-					`Enter the PIN, then touch the YubiKey. The Pi session only starts afterwards.\n` +
+					`Complete the SSH authentication prompt. The Pi session only starts afterwards.\n` +
 					`(Ctrl-C = cancel)\n\n`,
 			);
 
