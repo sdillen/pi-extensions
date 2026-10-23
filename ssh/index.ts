@@ -53,7 +53,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { Component, Focusable, Text } from "@earendil-works/pi-tui";
 import { CURSOR_MARKER, getKeybindings } from "@earendil-works/pi-tui";
-import { GUARD_GRACE_S, guardCommand, rootGuardArgs } from "./guard.ts";
+import { GUARD_GRACE_S, guardCommand, rootGuardArgs, shq } from "./guard.ts";
 import {
 	canRoundTrip,
 	cleanupMaster,
@@ -543,15 +543,14 @@ const WRONG_PW =
 function createRemoteReadOps(remote: string, remoteCwd: string, localCwd: string): ReadOperations {
 	const toRemote = (p: string) => p.replace(localCwd, remoteCwd);
 	return {
-		readFile: (p) =>
-			spawnSsh(remote, `cat ${JSON.stringify(toRemote(p))}`).then((r) => Buffer.from(r.output)),
+		readFile: (p) => spawnSsh(remote, `cat ${shq(toRemote(p))}`).then((r) => Buffer.from(r.output)),
 		access: (p) =>
-			spawnSsh(remote, `test -r ${JSON.stringify(toRemote(p))}`).then((r) => {
+			spawnSsh(remote, `test -r ${shq(toRemote(p))}`).then((r) => {
 				if (r.exitCode !== 0) throw new Error("not readable");
 			}),
 		detectImageMimeType: async (p) => {
 			try {
-				const r = await spawnSsh(remote, `file --mime-type -b ${JSON.stringify(toRemote(p))}`);
+				const r = await spawnSsh(remote, `file --mime-type -b ${shq(toRemote(p))}`);
 				const m = r.output.trim();
 				return ["image/jpeg", "image/png", "image/gif", "image/webp"].includes(m) ? m : null;
 			} catch {
@@ -571,12 +570,12 @@ function createRemoteWriteOps(
 		writeFile: async (p, content) => {
 			const r = await spawnSsh(
 				remote,
-				`echo ${JSON.stringify(Buffer.from(content).toString("base64"))} | base64 -d > ${JSON.stringify(toRemote(p))}`,
+				`echo ${shq(Buffer.from(content).toString("base64"))} | base64 -d > ${shq(toRemote(p))}`,
 			);
 			if (r.exitCode !== 0) throw new Error(`write failed: ${r.output}`);
 		},
 		mkdir: async (dir) => {
-			const r = await spawnSsh(remote, `mkdir -p ${JSON.stringify(toRemote(dir))}`);
+			const r = await spawnSsh(remote, `mkdir -p ${shq(toRemote(dir))}`);
 			if (r.exitCode !== 0) throw new Error(`mkdir failed: ${r.output}`);
 		},
 	};
@@ -598,7 +597,7 @@ function createRemoteBashOps(
 
 	return {
 		exec: async (command, cwd, { onData, signal, timeout }) => {
-			const base = `cd ${JSON.stringify(toRemote(cwd))} && `;
+			const base = `cd ${shq(toRemote(cwd))} && `;
 
 			// without sudo: run unchanged
 			if (!usesSudo(command)) {
@@ -630,7 +629,7 @@ function createRemoteSudoOps(
 				ctx,
 				remote,
 				command,
-				`cd ${JSON.stringify(toRemote(cwd))} && sudo -S -p '' ${rootGuardArgs(command)}`,
+				`cd ${shq(toRemote(cwd))} && sudo -S -p '' ${rootGuardArgs(command)}`,
 				{ onData, signal, timeout },
 			),
 	};
