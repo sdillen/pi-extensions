@@ -1,5 +1,12 @@
 # @sdillen/pi-ssh
 
+## 0.3.0
+
+### Minor Changes
+
+- 8cf9b29: - Add `--ssh-port <port>` to set a non-default SSH port for all connections (ControlMaster auth, control commands, remote commands). Each port gets its own ControlMaster socket.
+  - Apply the remote context by mutating the system prompt options in place instead of returning a replaced `systemPrompt`, which avoids a prompt cache miss.
+
 ## 0.2.4
 
 ### Patch Changes
