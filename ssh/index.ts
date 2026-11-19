@@ -71,6 +71,7 @@ import {
 	sshCommandArgs,
 	sshPortArgs,
 } from "./master.ts";
+import { applySshContext } from "./prompt.ts";
 import {
 	forgetSudo,
 	getSudoPass,
@@ -916,14 +917,10 @@ export default function (pi: ExtensionAPI) {
 		reprimeHook = undefined;
 	});
 
-	pi.on("before_agent_start", async (event) => {
+	// Mutate in place instead of returning systemPrompt: a returned systemPrompt
+	// replaces the whole prompt (cache miss, no section-level diffs).
+	pi.on("before_agent_start", (event) => {
 		const ssh = getSsh();
-		if (ssh) {
-			const modified = event.systemPrompt.replace(
-				`Current working directory: ${localCwd}`,
-				`Current working directory: ${ssh.remoteCwd} (via SSH: ${ssh.remote})`,
-			);
-			return { systemPrompt: modified };
-		}
+		if (ssh) applySshContext(event.systemPromptOptions, ssh);
 	});
 }
