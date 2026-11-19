@@ -19,6 +19,21 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 let sshControlSocket: string | null = null;
+let sshPort: number | null = null;
+
+/** Sets the port for all ssh calls (`--ssh-port`); null = ssh default / ~/.ssh/config. */
+export function setSshPort(port: number | null): void {
+	sshPort = port;
+}
+
+export function getSshPort(): number | null {
+	return sshPort;
+}
+
+/** `-p <port>` for ssh, if a port is set. */
+export function sshPortArgs(): string[] {
+	return sshPort === null ? [] : ["-p", String(sshPort)];
+}
 
 export const SSH_CONTROL_PERSIST: number = (() => {
 	const raw = process.env.SSH_CONTROL_PERSIST;
@@ -41,7 +56,9 @@ export function getControlSocket(): string | null {
 }
 
 export function socketPathFor(remote: string): string {
-	const safe = remote.replace(/[^A-Za-z0-9@:._-]/g, "_");
+	// Port goes into the socket name so two ports on the same host don't collide.
+	const key = sshPort === null ? remote : `${remote}-p${sshPort}`;
+	const safe = key.replace(/[^A-Za-z0-9@:._-]/g, "_");
 	return path.join(os.homedir(), ".ssh", "controlmaster", `${safe}.sock`);
 }
 
@@ -50,7 +67,16 @@ export function isSocketAlive(socket: string, remote: string): boolean {
 	try {
 		const r = spawnSync(
 			"ssh",
-			["-o", `ControlPath=${socket}`, "-o", "ConnectTimeout=1", "-O", "check", remote],
+			[
+				"-o",
+				`ControlPath=${socket}`,
+				"-o",
+				"ConnectTimeout=1",
+				...sshPortArgs(),
+				"-O",
+				"check",
+				remote,
+			],
 			{ timeout: 3000 },
 		);
 		return r.status === 0;
@@ -79,6 +105,7 @@ export function canRoundTrip(socket: string, remote: string): boolean {
 				"BatchMode=yes", // no prompt – only the existing socket counts
 				"-o",
 				"ConnectTimeout=3",
+				...sshPortArgs(),
 				remote,
 				"true",
 			],
@@ -95,7 +122,16 @@ export function cleanupMaster(socket: string, remote: string): void {
 	try {
 		spawnSync(
 			"ssh",
-			["-o", `ControlPath=${socket}`, "-o", "ConnectTimeout=2", "-O", "exit", remote],
+			[
+				"-o",
+				`ControlPath=${socket}`,
+				"-o",
+				"ConnectTimeout=2",
+				...sshPortArgs(),
+				"-O",
+				"exit",
+				remote,
+			],
 			{
 				timeout: 2000,
 			},
@@ -112,11 +148,18 @@ export function cleanupMaster(socket: string, remote: string): void {
 
 /** SSH arguments for remote commands: ride on the ControlMaster once set. */
 export function sshCommandArgs(remote: string): string[] {
-	if (!sshControlSocket) return [remote];
+	if (!sshControlSocket) return [...sshPortArgs(), remote];
 	// ControlMaster=no (instead of auto): a dead socket fails IMMEDIATELY and
 	// recognizably (broken pipe / connect failed), instead of silently falling
 	// into a new connection attempt, which cannot ask for the YubiKey PIN without a TTY.
-	return ["-o", `ControlPath=${sshControlSocket}`, "-o", "ControlMaster=no", remote];
+	return [
+		...sshPortArgs(),
+		"-o",
+		`ControlPath=${sshControlSocket}`,
+		"-o",
+		"ControlMaster=no",
+		remote,
+	];
 }
 
 /** Symptoms of a dead/zombie ControlMaster in ssh output. */

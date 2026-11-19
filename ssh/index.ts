@@ -23,6 +23,7 @@
  * Usage (from this repo):
  *   pi -e ./ssh --ssh user@host
  *   pi -e ./ssh --ssh user@host:/remote/path
+ *   pi -e ./ssh --ssh user@host --ssh-port 2222
  * Or the deployed copy in ~/.pi/agent/extensions/ssh/ (auto-discovered).
  *
  * Requirements:
@@ -59,13 +60,16 @@ import {
 	cleanupMaster,
 	DEAD_MASTER,
 	getControlSocket,
+	getSshPort,
 	invalidateMaster,
 	isMasterAlive,
 	isSocketAlive,
 	SSH_CONTROL_PERSIST,
 	setControlSocket,
+	setSshPort,
 	socketPathFor,
 	sshCommandArgs,
+	sshPortArgs,
 } from "./master.ts";
 import {
 	forgetSudo,
@@ -333,6 +337,7 @@ async function primeControlMaster(ctx: ExtensionContext, remote: string): Promis
 					socket,
 					"-o",
 					`ControlPersist=${SSH_CONTROL_PERSIST}`,
+					...sshPortArgs(),
 					remote,
 				],
 				{ stdio: "inherit", env: process.env },
@@ -420,7 +425,7 @@ function deadMasterMessage(remote: string): string {
 	return (
 		`[ssh.ts] SSH ControlMaster for ${remote} is dead (connection aborted) – ` +
 		"automatic re-authentication failed. Please check the YubiKey and " +
-		`pi --ssh ${remote}` +
+		`pi --ssh ${remote}${getSshPort() === null ? "" : ` --ssh-port ${getSshPort()}`}` +
 		" restart (or repeat the last ssh command)."
 	);
 }
@@ -710,6 +715,10 @@ export default function (pi: ExtensionAPI) {
 		description: "SSH remote: user@host or user@host:/path",
 		type: "string",
 	});
+	pi.registerFlag("ssh-port", {
+		description: "SSH port for --ssh (default: ssh default / ~/.ssh/config)",
+		type: "string",
+	});
 
 	const localCwd = process.cwd();
 	const localRead = createReadTool(localCwd);
@@ -849,6 +858,16 @@ export default function (pi: ExtensionAPI) {
 		setSudoToolActive(false);
 		const arg = pi.getFlag("ssh") as string | undefined;
 		if (!arg) return;
+
+		const portArg = pi.getFlag("ssh-port") as string | undefined;
+		if (portArg !== undefined) {
+			const port = Number(portArg);
+			if (!Number.isInteger(port) || port < 1 || port > 65535) {
+				ctx.ui.notify(`Invalid --ssh-port: "${portArg}" (expected 1–65535)`, "error");
+				return;
+			}
+			setSshPort(port);
+		}
 
 		let remote: string;
 		let remoteCwd: string | null = null;

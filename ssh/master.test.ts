@@ -17,8 +17,10 @@ const {
 	isMasterAlive,
 	isSocketAlive,
 	setControlSocket,
+	setSshPort,
 	socketPathFor,
 	sshCommandArgs,
+	sshPortArgs,
 } = await import("./master.ts");
 
 const remote = "user@example.org";
@@ -32,6 +34,7 @@ beforeEach(() => {
 	spawnSyncMock.mockReturnValue(ok);
 	rmSyncMock.mockReset();
 	invalidateMaster();
+	setSshPort(null);
 });
 
 afterEach(() => {
@@ -48,6 +51,36 @@ describe("socketPathFor", () => {
 	it("replaces dangerous characters, keeps host:port", () => {
 		const p = socketPathFor("usér@höst:1");
 		expect(p.endsWith("/controlmaster/us_r@h_st:1.sock")).toBe(true);
+	});
+});
+
+describe("--ssh-port", () => {
+	it("is empty without a port", () => {
+		expect(sshPortArgs()).toEqual([]);
+	});
+
+	it("returns -p <port> once set", () => {
+		setSshPort(2222);
+		expect(sshPortArgs()).toEqual(["-p", "2222"]);
+	});
+
+	it("separates socket paths by port", () => {
+		const plain = socketPathFor(remote);
+		setSshPort(2222);
+		expect(socketPathFor(remote)).not.toBe(plain);
+		expect(socketPathFor(remote).endsWith("/controlmaster/user@example.org-p2222.sock")).toBe(true);
+	});
+
+	it("prepends the port in sshCommandArgs", () => {
+		setSshPort(2222);
+		expect(sshCommandArgs(remote)).toEqual(["-p", "2222", remote]);
+	});
+
+	it("passes the port to ssh in isSocketAlive", () => {
+		setSshPort(2222);
+		isSocketAlive(sock, remote);
+		expect(spawnSyncMock.mock.calls[0][1]).toContain("-p");
+		expect(spawnSyncMock.mock.calls[0][1]).toContain("2222");
 	});
 });
 
