@@ -26,7 +26,7 @@ Or try them from a local clone for a single run:
 
 ```sh
 # SSH remote mode
-pi -e ./ssh --ssh user@host[:/remote/path]
+pi -e ./ssh --ssh user@host[:/remote/path] [--ssh-port 2222]
 
 # Brave search tool
 pi -e ./brave-search/brave-search.ts
